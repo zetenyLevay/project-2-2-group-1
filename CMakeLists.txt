@@ -7,4 +7,6 @@ include_directories(src/main)
 
 add_executable(project_2_2_group_1
         src/main/main.cpp
-        src/main/main.h)
+        src/main/main.h
+        src/ui/ui.cpp
+        src/ui/ui.h)
