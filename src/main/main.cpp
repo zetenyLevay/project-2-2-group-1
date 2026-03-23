@@ -20,6 +20,13 @@ const double w1_4 = 1/9; // cardinal directions
 const double w5_9 = 1/36; // diagnol directions
 const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
 
+// directions
+const int cx[9] = {0,1,0,-1,0,1,-1,1,-1};
+const int cy[9] = {0,0,1,0,-1,1,-1,-1,1};
+
+// speed of spread
+const double u = 1.0;
+
 int main() {
     return 0;
 }
