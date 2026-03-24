@@ -18,7 +18,7 @@ target_link_libraries(project_2_2_group_1 simulation_logic)
 
 enable_testing()
 
-add_executable(test_stream src/main/tests/test_stream.cpp)
+add_executable(test_stream tests/test_stream.cpp)
 target_link_libraries(test_stream simulation_logic)
 
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
