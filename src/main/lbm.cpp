@@ -5,7 +5,7 @@ int getIndex(int x, int y) {
     int wrappedY = (y + HEIGHT) % HEIGHT;
     return wrappedY * WIDTH + wrappedX;
 }
-void Collision(const Grid& grid, Grid& newGrid){
+void Collision(const Grid& grid, Grid& newGrid,dobule heat_spread){
     double temp=0;
     Grid newGrid;
     for (int y=0;y<height; y++){

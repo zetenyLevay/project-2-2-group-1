@@ -54,7 +54,7 @@ int main() {
         grid.g7[i] = weights[7] * temperatures[i];
         grid.g8[i] = weights[8] * temperatures[i];
     }
-    Collision(grid, gridTemp);
+    Collision(grid, gridTemp,heat_spread);
     stream(gridTemp, grid);
     for (int i =0; i<CELLS; i++){
         temp[i]=grid.g1[i] + grid.g2[i] + grid.g3[i] + grid.g4[i] + grid.g5[i] + grid.g6[i] + grid.g7[i] + grid.g8[i];
