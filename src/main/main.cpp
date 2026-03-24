@@ -35,23 +35,29 @@ void printTemperatures(const std::vector<double>& temps, int step) {
 }
 
 int main() {
-    Grid gridOld;
-    Grid gridNew;
+    Grid grid;
+    Grid gridTemp;
+
 
     std::vector<double> temperatures(CELLS,20.0);
 
     temperatures[getIndex(0,0)] = 100.0;
 
     for (int i = 1; i < CELLS; i++) {
-        gridOld.g0[i] = weights[0] * temperatures[i];
-        gridOld.g1[i] = weights[1] * temperatures[i];
-        gridOld.g2[i] = weights[2] * temperatures[i];
-        gridOld.g3[i] = weights[3] * temperatures[i];
-        gridOld.g4[i] = weights[4] * temperatures[i];
-        gridOld.g5[i] = weights[5] * temperatures[i];
-        gridOld.g6[i] = weights[6] * temperatures[i];
-        gridOld.g7[i] = weights[7] * temperatures[i];
-        gridOld.g8[i] = weights[8] * temperatures[i];
+        grid.g0[i] = weights[0] * temperatures[i];
+        grid.g1[i] = weights[1] * temperatures[i];
+        grid.g2[i] = weights[2] * temperatures[i];
+        grid.g3[i] = weights[3] * temperatures[i];
+        grid.g4[i] = weights[4] * temperatures[i];
+        grid.g5[i] = weights[5] * temperatures[i];
+        grid.g6[i] = weights[6] * temperatures[i];
+        grid.g7[i] = weights[7] * temperatures[i];
+        grid.g8[i] = weights[8] * temperatures[i];
+    }
+    Collision(grid, gridTemp);
+    stream(gridTemp, grid);
+    for (int i =0; i<CELLS; i++){
+        temp[i]=grid.g1[i] + grid.g2[i] + grid.g3[i] + grid.g4[i] + grid.g5[i] + grid.g6[i] + grid.g7[i] + grid.g8[i];
     }
 
     printTemperatures(temperatures, 0);

@@ -25,6 +25,7 @@ struct Grid {
 
 // 3. Function Declarations
 int getIndex(int x, int y);
-void stream(const Grid& gridOld, Grid& gridNew);
+void Collision(const Grid& grid, Grid& TempGrid);
+void stream(const Grid& TempGrid, Grid& grid);
 
 #endif //PROJECT_2_2_GROUP_1_MAIN_H

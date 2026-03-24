@@ -5,6 +5,31 @@ int getIndex(int x, int y) {
     int wrappedY = (y + HEIGHT) % HEIGHT;
     return wrappedY * WIDTH + wrappedX;
 }
+void Collision(const Grid& grid, Grid& newGrid){
+    double temp=0;
+    Grid newGrid;
+    for (int y=0;y<height; y++){
+        for(int x=0; x<width; x++){
+            int idx= getIndex(x,y);
+            //calculating temperature of every g inside a cell
+            temp=grid.g0[idx]+grid.g1[idx]+grid.g2[idx]+
+                 grid.g3[idx]+grid.g4[idx]+grid.g5[idx]+
+                 grid.g6[idx]+grid.g7[idx]+grid.g8[idx];
+            
+
+            //calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
+                newGrid.g0[idx]=grid.g0[idx]- (1.0/heat_spread)*(grid.g0[idx]-weights[0]*temp);
+                newGrid.g1[idx]=grid.g1[idx]- (1.0/heat_spread)*(grid.g1[idx]-weights[1]*temp);
+                newGrid.g2[idx]=grid.g2[idx]- (1.0/heat_spread)*(grid.g2[idx]-weights[2]*temp);
+                newGrid.g3[idx]=grid.g3[idx]- (1.0/heat_spread)*(grid.g3[idx]-weights[3]*temp);
+                newGrid.g4[idx]=grid.g4[idx]- (1.0/heat_spread)*(grid.g4[idx]-weights[4]*temp);
+                newGrid.g5[idx]=grid.g5[idx]- (1.0/heat_spread)*(grid.g5[idx]-weights[5]*temp);
+                newGrid.g6[idx]=grid.g6[idx]- (1.0/heat_spread)*(grid.g6[idx]-weights[6]*temp);
+                newGrid.g7[idx]=grid.g7[idx]- (1.0/heat_spread)*(grid.g7[idx]-weights[7]*temp);
+                newGrid.g8[idx]=grid.g8[idx]- (1.0/heat_spread)*(grid.g8[idx]-weights[8]*temp);
+        }
+    }
+}
 
 void stream(const Grid& gridOld, Grid& gridNew) {
     for(int y = 0; y < HEIGHT; y++) {
