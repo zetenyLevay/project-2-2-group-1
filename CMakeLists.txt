@@ -30,6 +30,8 @@ add_executable(project_2_2_group_1
         src/ui/ui.h
         src/opengl/main.cpp
         src/opengl/main.h
+        src/opengl/helloworld.cpp
+        vendor/glad/src/glad.c
 
         ${IMGUI_SOURCES}
         ${IMPLOT_SOURCES}
@@ -40,6 +42,8 @@ target_include_directories(project_2_2_group_1 PRIVATE
         vendor/imgui
         vendor/imgui/backends
         vendor/implot
+        vendor/glad/include
+        src/opengl
 )
 
 target_link_libraries(project_2_2_group_1 PRIVATE
