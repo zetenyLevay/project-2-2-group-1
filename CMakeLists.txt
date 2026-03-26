@@ -13,6 +13,11 @@ set(IMGUI_SOURCES
     vendor/imgui/backends/imgui_impl_opengl3.cpp
 )
 
+set(IMPLOT_SOURCES
+    vendor/implot/implot.cpp
+    vendor/implot/implot_items.cpp
+    vendor/implot/implot_demo.cpp
+)
 add_executable(project_2_2_group_1
         src/main/main.cpp
         src/main/main.h
@@ -21,11 +26,13 @@ add_executable(project_2_2_group_1
         src/ui/ui.h
 
         ${IMGUI_SOURCES}
+        ${IMPLOT_SOURCES}
 )
 
 target_include_directories(project_2_2_group_1 PRIVATE src/main)
 target_include_directories(project_2_2_group_1 PRIVATE vendor/imgui)
 target_include_directories(project_2_2_group_1 PRIVATE vendor/imgui/backends)
+target_include_directories(project_2_2_group_1 PRIVATE vendor/implot)
 
 add_subdirectory(vendor/glfw-3.4)
 

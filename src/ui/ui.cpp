@@ -3,6 +3,7 @@
 #include "imgui_internal.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
+#include "implot.h"
 #include <GLFW/glfw3.h> 
 #include <iostream>
 
@@ -20,8 +21,9 @@ void startGui() {
 
     glfwMakeContextCurrent(window); // Has the effect of making it the "main" window imGui will draw to.
 
-    // Now, we need to initialize imGui.
+    // Now, we need to initialize imGui and implot
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     
     // Setup for docking and viewports which allows for windows to be easily resized with the application
     ImGuiIO& io = ImGui::GetIO();
@@ -69,13 +71,13 @@ void startGui() {
             // Split the dockspace into our designated zones
             ImGuiID dock_main_id = dockspace_id;
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.10f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.33f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.50f, nullptr, &dock_id_right);
+            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, nullptr, &dock_main_id);
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.80f, nullptr, &dock_id_right);
 
             // Assign windows to those zones based on their title
             ImGui::DockBuilderDockWindow("Simulation", dock_main_id);
-            ImGui::DockBuilderDockWindow("Stats", dock_id_right);
-            ImGui::DockBuilderDockWindow("Simulation Controls", dock_id_right_bottom);
+            ImGui::DockBuilderDockWindow("Simulation Controls", dock_id_right);
+            ImGui::DockBuilderDockWindow("Stats", dock_id_right_bottom);
             ImGui::DockBuilderDockWindow("Timeline", dock_id_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
@@ -90,15 +92,13 @@ void startGui() {
         ImGui::Text("Simulation goes here");
         ImGui::End();
 
-        // --- Stats window ---
-        ImGui::Begin("Stats");
-        ImGui::Text("Statistics: ");
-        ImGui::End();
-
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (ImGui::Button("Start Simulation")) {
+        if (ImGui::Button("New Simulation")) {
             // TODO: Actually starts simulation
+        }
+        if (ImGui::Button("Load Simulation")) {
+            // TODO: Actually loads simulation
         }
         if (ImGui::Button("Change Angle")) {
             // TODO: Actually changes 2d to 3d
@@ -106,6 +106,39 @@ void startGui() {
         if (ImGui::Button("Heat Map")) {
             // TODO: Actually shows heat map
         }
+        ImGui::End();
+
+        // --- Stats window ---
+        ImGui::Begin("Stats");
+        ImGui::SeparatorText("Temperature Data");
+        ImGui::Text("Average Temperature: 10.2°C -- 283.4K");
+        ImGui::Text("Coldest Temperature: 8.3°C -- 281.5K");
+        ImGui::Text("Warmest Temperature: 22.8°C -- 296.0K");
+
+        // Graph for temperature
+        // Example data
+        static float x_time[] = { 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
+        static float y_temp[] = { 0.0f, 2.0f, 4.0f, 6.0f, 8.0f, 10.2f };
+
+        // Get available width and height
+        float width = ImGui::GetContentRegionAvail().x;
+        float height = ImGui::GetContentRegionAvail().y;
+
+        // Create graph
+        if (ImPlot::BeginPlot("Average Temp. against Time", ImVec2(-1.0f, height * 0.5f))) {
+            ImPlot::PlotLine("Temperature", x_time, y_temp, 6);
+
+            ImPlot::EndPlot();
+        }
+
+        // Space between sections
+        ImGui::Spacing();
+
+        // Simulation Info
+        ImGui::SeparatorText("Simulation Information");
+        ImGui::Text("GPU Resources: 50000 threads");
+        ImGui::Text(u8"Number of particles: 10²³");
+
         ImGui::End();
 
         // --- Timeline ---
