@@ -92,7 +92,7 @@ void startGui() {
 
         // --- Stats window ---
         ImGui::Begin("Stats");
-        ImGui::Text("Stastics: ");
+        ImGui::Text("Statistics: ");
         ImGui::End();
 
         // --- Simulation controls ---
