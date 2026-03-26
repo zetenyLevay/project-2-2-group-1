@@ -1,5 +1,8 @@
 #include "ui.h"
 #include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h> 
 
 void startGui() {
     // First, we need to initialize GLFW which is our window manager.
@@ -11,7 +14,7 @@ void startGui() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Heat Transfer Simulat", NULL, NULL);
 
     glfwMakeContextCurrent(window); // Has the effect of making it the "main" window imGui will draw to.
 
@@ -31,7 +34,7 @@ void startGui() {
         ImGui::NewFrame();
         // Gui elements go down below
 
-        // Begin a window
+        // Test window
         ImGui::Begin("Hello, world!");
         ImGui::Text("Hello once again!");
 
@@ -41,6 +44,54 @@ void startGui() {
 
         // End of previous window
         ImGui::End();
+        
+        // --- Simulation window ---
+        // Set size of 1280,720 and place it at the top left corner
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(1280, 900));
+
+        // Create the window
+        ImGui::Begin("Simulation");
+        ImGui::Text("Simulation goes here");
+        ImGui::End();
+
+        // --- Stats window ---
+        // Set size of 640,360 and place it right next to the simulation window
+        ImGui::SetNextWindowPos(ImVec2(1280, 0));
+        ImGui::SetNextWindowSize(ImVec2(640, 450));
+
+        // Create the window
+        ImGui::Begin("Stats");
+        ImGui::Text("Stastics: ");
+        ImGui::End();
+
+        // --- Simulation controls ---
+        // Set size of 640,360 and place it right next to the simulation window and below the stats window
+        ImGui::SetNextWindowPos(ImVec2(1280, 450));
+        ImGui::SetNextWindowSize(ImVec2(640, 450));
+
+        // Create the window
+        ImGui::Begin("Simulation Controls");
+        if (ImGui::Button("Start Simulation")) {
+            // TODO: Actually starts simulation
+        }
+        if (ImGui::Button("Change Angle")) {
+            // TODO: Actually changes 2d to 3d
+        }
+        if (ImGui::Button("Heat Map")) {
+            // TODO: Actually shows heat map
+        }
+        ImGui::End();
+
+        // --- Timeline ---
+        ImGui::SetNextWindowPos(ImVec2(0, 900));
+        ImGui::SetNextWindowSize(ImVec2(1920, 180));
+
+        // Create the window
+        ImGui::Begin("Timeline");
+        ImGui::Text("Placeholder");
+        ImGui::End();
+
 
         // End of gui elements
 
