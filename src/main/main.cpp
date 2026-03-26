@@ -3,6 +3,7 @@
 //
 
 #include "main.h"
+#include "../ui/ui.h"
 
 const int WIDTH = 3;
 const int HEIGHT = 2;

@@ -42,3 +42,20 @@
 
 # other
 .idea
+
+.vscode
+
+# CMake build files
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+project_2_2_group_1
+
+# imgui config file
+imgui.ini
+
+# macos trash
+.DS_Store
+
+build/
