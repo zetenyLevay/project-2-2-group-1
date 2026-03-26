@@ -4,6 +4,7 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h> 
+#include <iostream>
 
 void startGui() {
     // First, we need to initialize GLFW which is our window manager.
@@ -15,7 +16,7 @@ void startGui() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Heat Transfer Simulat", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1920, 1080, "Heat Transfer Simulation", NULL, NULL);
 
     glfwMakeContextCurrent(window); // Has the effect of making it the "main" window imGui will draw to.
 
@@ -83,17 +84,6 @@ void startGui() {
         ImGui::End();
 
         // Gui elements go down below
-
-        // Test window
-        ImGui::Begin("Hello, world!");
-        ImGui::Text("Hello once again!");
-
-        if (ImGui::Button("Exit")) {
-            glfwSetWindowShouldClose(window, GL_TRUE);
-        }
-
-        // End of previous window
-        ImGui::End();
         
         // --- Simulation window ---
         ImGui::Begin("Simulation");
@@ -120,7 +110,18 @@ void startGui() {
 
         // --- Timeline ---
         ImGui::Begin("Timeline");
-        ImGui::Text("Placeholder");
+
+        static float currentTime = 0.0f;
+        float totalTime = 10.0f;
+
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
+
+        ImGui::SetNextItemWidth(-1.0f);
+        // Hide the label by using "##"
+        if (ImGui::SliderFloat("##timeline", &currentTime, 0.0f, totalTime, "%.2f")) {
+            std::cout << "Scrolling timeline...\n";
+        }
+
         ImGui::End();
 
 
