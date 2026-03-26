@@ -47,8 +47,8 @@ void startGui() {
         
         // --- Simulation window ---
         // Set size of 1280,720 and place it at the top left corner
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(1280, 900));
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(1280, 900)), ImGuiCond_FirstUseEver;
 
         // Create the window
         ImGui::Begin("Simulation");
@@ -57,8 +57,8 @@ void startGui() {
 
         // --- Stats window ---
         // Set size of 640,360 and place it right next to the simulation window
-        ImGui::SetNextWindowPos(ImVec2(1280, 0));
-        ImGui::SetNextWindowSize(ImVec2(640, 450));
+        ImGui::SetNextWindowPos(ImVec2(1280, 0), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(640, 450), ImGuiCond_FirstUseEver);
 
         // Create the window
         ImGui::Begin("Stats");
@@ -67,8 +67,8 @@ void startGui() {
 
         // --- Simulation controls ---
         // Set size of 640,360 and place it right next to the simulation window and below the stats window
-        ImGui::SetNextWindowPos(ImVec2(1280, 450));
-        ImGui::SetNextWindowSize(ImVec2(640, 450));
+        ImGui::SetNextWindowPos(ImVec2(1280, 450), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(640, 450), ImGuiCond_FirstUseEver);
 
         // Create the window
         ImGui::Begin("Simulation Controls");
@@ -84,8 +84,8 @@ void startGui() {
         ImGui::End();
 
         // --- Timeline ---
-        ImGui::SetNextWindowPos(ImVec2(0, 900));
-        ImGui::SetNextWindowSize(ImVec2(1920, 180));
+        ImGui::SetNextWindowPos(ImVec2(0, 900), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(1920, 180), ImGuiCond_FirstUseEver);
 
         // Create the window
         ImGui::Begin("Timeline");
