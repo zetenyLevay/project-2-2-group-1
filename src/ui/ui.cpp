@@ -31,6 +31,7 @@ void startGui() {
         ImGui::NewFrame();
         // Gui elements go down below
 
+        // Begin a window
         ImGui::Begin("Hello, world!");
         ImGui::Text("Hello once again!");
 
@@ -38,8 +39,10 @@ void startGui() {
             glfwSetWindowShouldClose(window, GL_TRUE);
         }
 
-        // End of gui elements
+        // End of previous window
         ImGui::End();
+
+        // End of gui elements
 
         ImGui::Render();
 
