@@ -3,6 +3,7 @@
 //
 
 #include "main.h"
+#include "../ui/ui.h"
 
 const int WIDTH = 3;
 const int HEIGHT = 2;
@@ -21,5 +22,6 @@ const double w5_9 = 1/36; // diagnol directions
 const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
 
 int main() {
+    startGui();
     return 0;
 }
