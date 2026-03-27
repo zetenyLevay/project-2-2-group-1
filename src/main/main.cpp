@@ -9,6 +9,7 @@
 #include <iomanip>
 
 #define ASIO_STANDALONE // Tells WebSocket++ we aren't using Boost
+#define _WEBSOCKETPP_CPP11_STL_ // Windows fix: Tells WebSocket++ to use standard C++11 threads instead of Boost
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
