@@ -3,6 +3,7 @@
 //
 
 #include "main.h"
+#include "ui.h"
 #include <iostream>
 #include <vector>
 #include <iomanip>
@@ -12,6 +13,31 @@
 #include <websocketpp/server.hpp>
 
 typedef websocketpp::server<websocketpp::config::asio> server;
+
+void runWebSocketServer(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
+    server ws_server;
+    ws_server.clear_access_channels(websocketpp::log::alevel::all);
+    ws_server.init_asio();
+
+    ws_server.set_message_handler([&](websocketpp::connection_hdl hdl, server::message_ptr msg) {
+        if (msg->get_payload() == "NEXT_FRAME") {
+            Collision(grid, gridTemp, 1.0); // heat_spread = 1.0
+            stream(gridTemp, grid); 
+            
+            for (int i = 0; i < CELLS; i++) {
+                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
+                                  grid.g3[i] + grid.g4[i] + grid.g5[i] + 
+                                  grid.g6[i] + grid.g7[i] + grid.g8[i];
+            }
+            ws_server.send(hdl, temperatures.data(), temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
+        }
+    });
+
+    std::cout << "Starting LBM Physics Server on ws://localhost:8080..." << std::endl;
+    ws_server.listen(8080);
+    ws_server.start_accept();
+    ws_server.run(); 
+}
 
 // Physics constants
 const double MAX_TEMP = 100.0; // temp of top left cell
@@ -55,46 +81,15 @@ int main() {
     
     // printTemperatures(temperatures, 0);
 
-    server ws_server;
-    
-    // Disable annoying access logs in the terminal
-    ws_server.clear_access_channels(websocketpp::log::alevel::all);
+    // Mode Selector
+    bool run_gui_mode = true; // Set to false to run the WebSocket server!
 
-    ws_server.init_asio();
+    if (run_gui_mode) {
+        std::cout << "Booting Desktop UI..." << std::endl;
+        startGui(grid, gridTemp, temperatures);
+    } else {
+        runWebSocketServer(grid, gridTemp, temperatures);
+    }
 
-    // UI sends msg
-    ws_server.set_message_handler([&](websocketpp::connection_hdl hdl, server::message_ptr msg) {
-        
-        std::string command = msg->get_payload();
-
-        if (command == "NEXT_FRAME") {
-            // 1. Calculate Physics
-            Collision(grid, gridTemp, heat_spread);
-            stream(gridTemp, grid); // Result goes back into grid for the next loop
-
-            // 2. Recalculate Macroscopic Temperatures for the UI
-            for (int i = 0; i < CELLS; i++) {
-                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
-                                  grid.g3[i] + grid.g4[i] + grid.g5[i] + 
-                                  grid.g6[i] + grid.g7[i] + grid.g8[i];
-            }
-
-            // 3. Send the raw binary array back to JavaScript
-            ws_server.send(hdl, 
-                           temperatures.data(), 
-                           temperatures.size() * sizeof(double), 
-                           websocketpp::frame::opcode::binary);
-        }
-    });
-
-    // Start Listening
-    std::cout << "Starting LBM Physics Server on ws://localhost:8080..." << std::endl;
-    std::cout << "Waiting for Electron UI to connect..." << std::endl;
-    
-    ws_server.listen(8080);
-    ws_server.start_accept();
-    
-    ws_server.run(); 
-    
     return 0;
 }

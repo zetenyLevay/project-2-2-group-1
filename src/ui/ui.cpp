@@ -6,8 +6,10 @@
 #include "implot.h"
 #include <GLFW/glfw3.h> 
 #include <iostream>
+#include <thread>
+#include <numeric>
 
-void startGui() {
+void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -34,9 +36,57 @@ void startGui() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
+    // State vars for physics engine
+    bool is_playing = false;
+    double heat_spread = 1.0;
+
+    double last_physics_tick = glfwGetTime();
+    double physics_tick_rate = 0.5; // Run 1 physics step every 0.5 seconds
+
+    std::vector<double> time_history;
+    std::vector<double> max_temp_history;
+    std::vector<double> min_temp_history;
+    std::vector<std::vector<double>> temperature_history;
+    int current_step = 0;
+
+    // Add the initial state (Step 0)
+    time_history.push_back(current_step);
+    max_temp_history.push_back(100.0); // Starts at 100
+    min_temp_history.push_back(20.0);  // Starts at 20
+
     // The main loop
     while(!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        double current_time = glfwGetTime();        
+
+        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
+            Collision(grid, gridTemp, heat_spread);
+            stream(gridTemp, grid);
+
+            double current_max = 0.0;
+            double current_min = 100.0; // Assuming 100 is max possible
+            
+            for (int i = 0; i < CELLS; i++) {
+                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
+                                  grid.g3[i] + grid.g4[i] + grid.g5[i] + 
+                                  grid.g6[i] + grid.g7[i] + grid.g8[i];
+
+                // Find Max and Min for the graph
+                if (temperatures[i] > current_max) current_max = temperatures[i];
+                if (temperatures[i] < current_min) current_min = temperatures[i];
+            }
+
+            // Save to history
+            current_step++;
+            time_history.push_back(current_step);
+            max_temp_history.push_back(current_max);
+            min_temp_history.push_back(current_min);
+            temperature_history.push_back(temperatures);
+            
+            // Reset the timer for the next tick
+            last_physics_tick = current_time;
+        }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -89,31 +139,86 @@ void startGui() {
         
         // --- Simulation window ---
         ImGui::Begin("Simulation");
-        ImGui::Text("Simulation goes here");
+
+        // We use -1.0f to make the plot fill the entire available window space
+        if (ImPlot::BeginPlot("##HeatmapCanvas", ImVec2(-1.0f, -1.0f), ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
+            
+            // Hide the X and Y axes so it looks like a  2D canvas and not a graph
+            ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+            
+            // Force the plot to match the exact dimensions of the grid
+            ImPlot::SetupAxesLimits(0, WIDTH, HEIGHT, 0, ImGuiCond_Always);
+
+            // Change the colors 
+            // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
+            // ImPlotColormap_Hot goes from Black (Cold) to White/Yellow (Hot)
+            ImPlot::PushColormap(ImPlotColormap_Jet); 
+
+            // Draw the heatmap
+            ImPlot::PlotHeatmap("##HeatData", 
+                                temperatures.data(), 
+                                HEIGHT, WIDTH,
+                                20.0, 100.0,
+                                nullptr,       // Custom label format (nullptr hides it)
+                                ImPlotPoint(0, HEIGHT), ImPlotPoint(WIDTH, 0));
+
+            ImPlot::PopColormap();
+
+            ImPlot::EndPlot();
+        }        
         ImGui::End();
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (ImGui::Button("New Simulation")) {
-            // TODO: Actually starts simulation
+        if (is_playing) {
+            if (ImGui::Button("Pause Simulation")) {
+                is_playing = false;
+            }
+        } 
+        
+        else {
+            if (ImGui::Button("Play Simulation")) {
+                is_playing = true;
+            }
         }
-        if (ImGui::Button("Load Simulation")) {
-            // TODO: Actually loads simulation
-        }
-        if (ImGui::Button("Change Angle")) {
-            // TODO: Actually changes 2d to 3d
-        }
-        if (ImGui::Button("Heat Map")) {
-            // TODO: Actually shows heat map
+        
+        if (ImGui::Button("Step Forward (1 Frame)")) {
+            // Just run it once without setting is_playing to true
+            Collision(grid, gridTemp, heat_spread);
+            stream(gridTemp, grid);
+            
+            double current_max = 0.0;
+            double current_min = 100.0; // Assuming 100 is max possible
+            
+            for (int i = 0; i < CELLS; i++) {
+                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + grid.g3[i] + grid.g4[i] + grid.g5[i] + grid.g6[i] + grid.g7[i] + grid.g8[i];
+                // Find Max and Min for the graph
+                if (temperatures[i] > current_max) current_max = temperatures[i];
+                if (temperatures[i] < current_min) current_min = temperatures[i];
+            }
+            // Save to history
+            current_step++;
+            time_history.push_back(current_step);
+            max_temp_history.push_back(current_max);
+            min_temp_history.push_back(current_min);
+            temperature_history.push_back(temperatures);
         }
         ImGui::End();
 
         // --- Stats window ---
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
+
+        /*
         ImGui::Text("Average Temperature: 10.2°C -- 283.4K");
         ImGui::Text("Coldest Temperature: 8.3°C -- 281.5K");
         ImGui::Text("Warmest Temperature: 22.8°C -- 296.0K");
+        */
+
+        // Live real data
+        ImGui::Text("Hot Spot (0,0): %.2f C", temperatures[getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", temperatures[getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", temperatures[getIndex(2,1)]);
 
         // Graph for temperature
         // Example data
@@ -125,8 +230,21 @@ void startGui() {
         float height = ImGui::GetContentRegionAvail().y;
 
         // Create graph
-        if (ImPlot::BeginPlot("Average Temp. against Time", ImVec2(-1.0f, height * 0.5f))) {
-            ImPlot::PlotLine("Temperature", x_time, y_temp, 6);
+        if (ImPlot::BeginPlot("Temperature Convergence", ImVec2(-1.0f, height * 0.5f))) {            
+            
+            // Setup Axis Labels
+            ImPlot::SetupAxes("Time Step", "Temperature (°C)");
+            
+            // Make the X-Axis automatically scroll forward as time goes on
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (current_step > 5 ? current_step + 1 : 5), ImGuiCond_Always);
+            
+            // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
+            ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
+
+            // Plot real vectors
+            // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
+            ImPlot::PlotLine("Max Temp (Hot Spot)", time_history.data(), max_temp_history.data(), time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", time_history.data(), min_temp_history.data(), time_history.size());
 
             ImPlot::EndPlot();
         }
@@ -135,9 +253,22 @@ void startGui() {
         ImGui::Spacing();
 
         // Simulation Info
-        ImGui::SeparatorText("Simulation Information");
-        ImGui::Text("GPU Resources: 50000 threads");
-        ImGui::Text(u8"Number of particles: 10²³");
+        ImGui::SeparatorText("Engine & Hardware Information");
+        
+        // 1. Hardware Detection
+        unsigned int cpu_threads = std::thread::hardware_concurrency();
+        ImGui::Text("Host Hardware: %d CPU Threads", cpu_threads);
+        ImGui::Text("CUDA GPU: None (CPU Prototype Mode)");
+
+        // 2. LBM Grid Stats
+        ImGui::Text("Grid Size: %d x %d", WIDTH, HEIGHT);
+        ImGui::Text("Memory Nodes: %d cells", CELLS);
+
+        // 3. Thermodynamic Conservation
+        // Sums up every temperature in the grid to prove no heat is lost
+        double total_energy = std::accumulate(temperatures.begin(), temperatures.end(), 0.0);
+        ImGui::Text("Total System Energy: %.2f J", total_energy);
+
 
         ImGui::End();
 
