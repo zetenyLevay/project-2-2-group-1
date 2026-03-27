@@ -5,11 +5,11 @@ int getIndex(int x, int y) {
     int wrappedY = (y + HEIGHT) % HEIGHT;
     return wrappedY * WIDTH + wrappedX;
 }
-void Collision(const Grid& grid, Grid& newGrid,dobule heat_spread){
-    double temp=0;
-    Grid newGrid;
-    for (int y=0;y<height; y++){
-        for(int x=0; x<width; x++){
+void Collision(const Grid& grid, Grid& newGrid, double heat_spread){
+    double temp=0.0;
+
+    for (int y=0;y<HEIGHT; y++){
+        for(int x=0; x<WIDTH; x++){
             int idx= getIndex(x,y);
             //calculating temperature of every g inside a cell
             temp=grid.g0[idx]+grid.g1[idx]+grid.g2[idx]+

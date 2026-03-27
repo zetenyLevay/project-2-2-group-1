@@ -15,6 +15,12 @@ const int CELLS = WIDTH * HEIGHT;
 const int cx[9] = {0,1,0,-1,0,1,-1,1,-1};
 const int cy[9] = {0,0,1,0,-1,1,-1,-1,1};
 
+// Weights of directions
+const double w0 = 4.0/9.0; // rest direction (itself)
+const double w1_4 = 1.0/9.0; // cardinal directions
+const double w5_9 = 1.0/36.0; // diagnol directions
+const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
+
 // 2. Shared Data Structure (Structure of Arrays)
 struct Grid {
     std::vector<double> g0,g1,g2,g3,g4,g5,g6,g7,g8;
