@@ -25,8 +25,24 @@ FetchContent_Declare(
     websocketpp
     GIT_REPOSITORY https://github.com/zaphoyd/websocketpp.git
     GIT_TAG        0.8.2
+    # Deletes the outdated CMakeLists.txt to prevent CMake 4.3 compatibility errors
+    PATCH_COMMAND  ${CMAKE_COMMAND} -E rm -f CMakeLists.txt
 )
 FetchContent_MakeAvailable(websocketpp)
+
+# Create a proper CMake target for WebSocket++ to force C++11 mode
+add_library(websocketpp INTERFACE)
+target_include_directories(websocketpp INTERFACE ${websocketpp_SOURCE_DIR})
+# FORCE all C++11 features to bypass Boost entirely, covering all MinGW edge cases
+target_compile_definitions(websocketpp INTERFACE 
+    ASIO_STANDALONE
+    _WEBSOCKETPP_CPP11_STL_
+    _WEBSOCKETPP_CPP11_THREAD_
+    _WEBSOCKETPP_CPP11_FUNCTIONAL_
+    _WEBSOCKETPP_CPP11_SYSTEM_ERROR_
+    _WEBSOCKETPP_CPP11_RANDOM_DEVICE_
+    _WEBSOCKETPP_CPP11_MEMORY_
+)
 
 add_subdirectory(vendor/glfw-3.4)
 
@@ -52,7 +68,6 @@ include_directories(
     vendor/imgui
     vendor/imgui/backends
     vendor/implot
-    ${websocketpp_SOURCE_DIR}
 )
 
 add_library(simulation_logic
@@ -74,12 +89,15 @@ target_link_libraries(project_2_2_group_1
     glfw 
     OpenGL::GL 
     asio 
+    websocketpp
     Threads::Threads
+    ws2_32   # Required for MinGW / Windows networking
+    wsock32  # Required for MinGW / Windows networking
 )
 
 # Testing
 enable_testing()
 add_executable(test_stream tests/test_stream.cpp)
 # The test only links the math and network, skipping the heavy UI stuff
-target_link_libraries(test_stream simulation_logic asio Threads::Threads)
+target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads ws2_32 wsock32)
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
