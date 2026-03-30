@@ -29,7 +29,7 @@ To compile and run this project, you will need the following installed on your s
 
 **C++ Compiler**: Must support C++14 (e.g., GCC, Clang, or MSVC).
 
-**CMake**: Version **3.5**.
+**CMake**: Version **4.3**.
 
 ## Compilation Instructions
 This project uses CMake for an out-of-source build, keeping compiled binaries separate from the source code.
@@ -44,7 +44,7 @@ This project uses CMake for an out-of-source build, keeping compiled binaries se
     ```
 3. Generate build files using CMake:
     ``` bash
-    cmake ..
+    cmake -G "MinGW Makefiles" ..
     ```
 4. Compile the project:
     ``` bash
