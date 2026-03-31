@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "ui.h"
+#include "SimulationEngine.h"
 #include <iostream>
 #include <vector>
 #include <iomanip>
@@ -13,22 +14,22 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-void runWebSocketServer(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
+// Physics constants
+const double MAX_TEMP = 100.0; // temp of top left cell
+const double ROOM_TEMP = 20.0;
+
+void runWebSocketServer(SimulationEngine& engine) {
     server ws_server;
     ws_server.clear_access_channels(websocketpp::log::alevel::all);
     ws_server.init_asio();
 
     ws_server.set_message_handler([&](websocketpp::connection_hdl hdl, server::message_ptr msg) {
         if (msg->get_payload() == "NEXT_FRAME") {
-            Collision(grid, gridTemp, 1.0); // heat_spread = 1.0
-            stream(gridTemp, grid); 
+            // Advance the physics by one frame
+            engine.stepFoward();
             
-            for (int i = 0; i < CELLS; i++) {
-                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
-                                  grid.g3[i] + grid.g4[i] + grid.g5[i] + 
-                                  grid.g6[i] + grid.g7[i] + grid.g8[i];
-            }
-            ws_server.send(hdl, temperatures.data(), temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
+            // Send updated temperatures
+            ws_server.send(hdl, engine.temperatures.data(), engine.temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
         }
     });
 
@@ -38,9 +39,7 @@ void runWebSocketServer(Grid& grid, Grid& gridTemp, std::vector<double>& tempera
     ws_server.run(); 
 }
 
-// Physics constants
-const double MAX_TEMP = 100.0; // temp of top left cell
-const double ROOM_TEMP = 20.0;
+
 // relaxation time for temperature spread
 const double heat_spread = 1.0;
 
@@ -58,24 +57,20 @@ void printTemperatures(const std::vector<double>& temps, int step) {
 }
 
 int main() {
-    Grid grid;
-    Grid gridTemp;
+    SimulationEngine engine;
 
-
-    std::vector<double> temperatures(CELLS, ROOM_TEMP);
-
-    temperatures[getIndex(0,0)] = MAX_TEMP;
+    engine.temperatures[getIndex(0,0)] = MAX_TEMP;
 
     for (int i = 0; i < CELLS; i++) {
-        grid.g0[i] = weights[0] * temperatures[i];
-        grid.g1[i] = weights[1] * temperatures[i];
-        grid.g2[i] = weights[2] * temperatures[i];
-        grid.g3[i] = weights[3] * temperatures[i];
-        grid.g4[i] = weights[4] * temperatures[i];
-        grid.g5[i] = weights[5] * temperatures[i];
-        grid.g6[i] = weights[6] * temperatures[i];
-        grid.g7[i] = weights[7] * temperatures[i];
-        grid.g8[i] = weights[8] * temperatures[i];
+        engine.grid.g0[i] = weights[0] * engine.temperatures[i];
+        engine.grid.g1[i] = weights[1] * engine.temperatures[i];
+        engine.grid.g2[i] = weights[2] * engine.temperatures[i];
+        engine.grid.g3[i] = weights[3] * engine.temperatures[i];
+        engine.grid.g4[i] = weights[4] * engine.temperatures[i];
+        engine.grid.g5[i] = weights[5] * engine.temperatures[i];
+        engine.grid.g6[i] = weights[6] * engine.temperatures[i];
+        engine.grid.g7[i] = weights[7] * engine.temperatures[i];
+        engine.grid.g8[i] = weights[8] * engine.temperatures[i];
     }
     
     // printTemperatures(temperatures, 0);
@@ -85,9 +80,9 @@ int main() {
 
     if (run_gui_mode) {
         std::cout << "Booting Desktop UI..." << std::endl;
-        startGui(grid, gridTemp, temperatures);
+        startGui(engine);
     } else {
-        runWebSocketServer(grid, gridTemp, temperatures);
+        runWebSocketServer(engine);
     }
 
     return 0;

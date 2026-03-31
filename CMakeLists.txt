@@ -25,15 +25,14 @@ FetchContent_Declare(
     websocketpp
     GIT_REPOSITORY https://github.com/zaphoyd/websocketpp.git
     GIT_TAG        0.8.2
-    # Deletes the outdated CMakeLists.txt to prevent CMake 4.3 compatibility errors
+    # Deletes the outdated CMakeLists.txt to make it compatible with cmake 4.3
     PATCH_COMMAND  ${CMAKE_COMMAND} -E rm -f CMakeLists.txt
 )
 FetchContent_MakeAvailable(websocketpp)
 
-# Create a proper CMake target for WebSocket++ to force C++11 mode
+# Force C++11 to bypass boost
 add_library(websocketpp INTERFACE)
 target_include_directories(websocketpp INTERFACE ${websocketpp_SOURCE_DIR})
-# FORCE all C++11 features to bypass Boost entirely, covering all MinGW edge cases
 target_compile_definitions(websocketpp INTERFACE 
     ASIO_STANDALONE
     _WEBSOCKETPP_CPP11_STL_
@@ -65,13 +64,16 @@ set(IMPLOT_SOURCES
 include_directories(
     src/main
     src/ui
+    src/physics
     vendor/imgui
     vendor/imgui/backends
     vendor/implot
 )
 
 add_library(simulation_logic
-    src/main/lbm.cpp
+    src/physics/lbm.cpp
+    src/physics/SimulationEngine.cpp
+    src/physics/SimulationEngine.h
     src/main/main.h
 )
 

@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "SimulationEngine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "backends/imgui_impl_glfw.h"
@@ -9,7 +10,7 @@
 #include <thread>
 #include <numeric>
 
-void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
+void startGui(SimulationEngine& engine) {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -20,7 +21,6 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     GLFWwindow* window = glfwCreateWindow(1920, 1080, "Heat Transfer Simulation", NULL, NULL);
-
     glfwMakeContextCurrent(window); // Has the effect of making it the "main" window imGui will draw to.
 
     // Now, we need to initialize imGui and implot
@@ -32,27 +32,11 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    // State vars for physics engine
-    bool is_playing = false;
-    double heat_spread = 1.0;
-
     double last_physics_tick = glfwGetTime();
     double physics_tick_rate = 0.5; // Run 1 physics step every 0.5 seconds
-
-    std::vector<double> time_history;
-    std::vector<double> max_temp_history;
-    std::vector<double> min_temp_history;
-    std::vector<std::vector<double>> temperature_history;
-    int current_step = 0;
-
-    // Add the initial state (Step 0)
-    time_history.push_back(current_step);
-    max_temp_history.push_back(100.0); // Starts at 100
-    min_temp_history.push_back(20.0);  // Starts at 20
 
     // The main loop
     while(!glfwWindowShouldClose(window)) {
@@ -60,29 +44,8 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
 
         double current_time = glfwGetTime();        
 
-        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
-            Collision(grid, gridTemp, heat_spread);
-            stream(gridTemp, grid);
-
-            double current_max = 0.0;
-            double current_min = 100.0; // Assuming 100 is max possible
-            
-            for (int i = 0; i < CELLS; i++) {
-                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
-                                  grid.g3[i] + grid.g4[i] + grid.g5[i] + 
-                                  grid.g6[i] + grid.g7[i] + grid.g8[i];
-
-                // Find Max and Min for the graph
-                if (temperatures[i] > current_max) current_max = temperatures[i];
-                if (temperatures[i] < current_min) current_min = temperatures[i];
-            }
-
-            // Save to history
-            current_step++;
-            time_history.push_back(current_step);
-            max_temp_history.push_back(current_max);
-            min_temp_history.push_back(current_min);
-            temperature_history.push_back(temperatures);
+        if (engine.is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
+            engine.stepFoward();
             
             // Reset the timer for the next tick
             last_physics_tick = current_time;
@@ -156,7 +119,7 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
 
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
-                                temperatures.data(), 
+                                engine.temperatures.data(), 
                                 HEIGHT, WIDTH,
                                 20.0, 100.0,
                                 nullptr,       // Custom label format (nullptr hides it)
@@ -170,38 +133,20 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (is_playing) {
+        if (engine.is_playing) {
             if (ImGui::Button("Pause Simulation")) {
-                is_playing = false;
+                engine.is_playing = false;
             }
         } 
         
         else {
             if (ImGui::Button("Play Simulation")) {
-                is_playing = true;
+                engine.is_playing = true;
             }
         }
         
         if (ImGui::Button("Step Forward (1 Frame)")) {
-            // Just run it once without setting is_playing to true
-            Collision(grid, gridTemp, heat_spread);
-            stream(gridTemp, grid);
-            
-            double current_max = 0.0;
-            double current_min = 100.0; // Assuming 100 is max possible
-            
-            for (int i = 0; i < CELLS; i++) {
-                temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + grid.g3[i] + grid.g4[i] + grid.g5[i] + grid.g6[i] + grid.g7[i] + grid.g8[i];
-                // Find Max and Min for the graph
-                if (temperatures[i] > current_max) current_max = temperatures[i];
-                if (temperatures[i] < current_min) current_min = temperatures[i];
-            }
-            // Save to history
-            current_step++;
-            time_history.push_back(current_step);
-            max_temp_history.push_back(current_max);
-            min_temp_history.push_back(current_min);
-            temperature_history.push_back(temperatures);
+            engine.stepFoward();
         }
         ImGui::End();
 
@@ -216,9 +161,9 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
         */
 
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", temperatures[getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", temperatures[getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", temperatures[getIndex(2,1)]);
+        ImGui::Text("Hot Spot (0,0): %.2f C", engine.temperatures[getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", engine.temperatures[getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", engine.temperatures[getIndex(2,1)]);
 
         // Graph for temperature
         // Example data
@@ -236,15 +181,15 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
             ImPlot::SetupAxes("Time Step", "Temperature (°C)");
             
             // Make the X-Axis automatically scroll forward as time goes on
-            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (current_step > 5 ? current_step + 1 : 5), ImGuiCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (engine.current_step > 5 ? engine.current_step + 1 : 5), ImGuiCond_Always);
             
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", time_history.data(), max_temp_history.data(), time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", time_history.data(), min_temp_history.data(), time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", engine.time_history.data(), engine.max_temp_history.data(), engine.time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", engine.time_history.data(), engine.min_temp_history.data(), engine.time_history.size());
 
             ImPlot::EndPlot();
         }
@@ -266,9 +211,8 @@ void startGui(Grid& grid, Grid& gridTemp, std::vector<double>& temperatures) {
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
-        double total_energy = std::accumulate(temperatures.begin(), temperatures.end(), 0.0);
+        double total_energy = std::accumulate(engine.temperatures.begin(), engine.temperatures.end(), 0.0);
         ImGui::Text("Total System Energy: %.2f J", total_energy);
-
 
         ImGui::End();
 
