@@ -6,6 +6,8 @@
 #define PROJECT_2_2_GROUP_1_MAIN_H
 
 #include <vector>
+#include <array>
+
 // 1. Shared Constants
 const int WIDTH = 3;
 const int HEIGHT = 2;
@@ -23,10 +25,12 @@ const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
 
 // 2. Shared Data Structure (Structure of Arrays)
 struct Grid {
-    std::vector<double> g0,g1,g2,g3,g4,g5,g6,g7,g8;
-    Grid() :
-        g0(CELLS, 0.0), g1(CELLS, 0.0), g2(CELLS, 0.0), g3(CELLS, 0.0), g4(CELLS, 0.0),
-        g5(CELLS, 0.0), g6(CELLS, 0.0), g7(CELLS, 0.0), g8(CELLS, 0.0) {};
+    std::array<std::vector<double>, 9> g;
+    Grid() {
+        for (int i = 0; i < 9; ++i) {
+            g[i].resize(CELLS, 0.0);
+        }
+    }
 };
 
 // 3. Function Declarations

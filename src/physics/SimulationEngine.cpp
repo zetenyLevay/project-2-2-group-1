@@ -7,8 +7,6 @@ SimulationEngine::SimulationEngine() {
     heat_spread = 1.0;
     temperatures.resize(CELLS, 20.0); // room temp assumption
 
-    // Grid initialization
-
     time_history.push_back(current_step);
     max_temp_history.push_back(100.0);
     min_temp_history.push_back(20.0);
@@ -22,9 +20,12 @@ void SimulationEngine::stepFoward() {
     double current_min = 100.0; // Assuming max 100 is possible
 
     for (int i = 0; i < CELLS; i++) {
-        temperatures[i] = grid.g0[i] + grid.g1[i] + grid.g2[i] + 
-                          grid.g3[i] + grid.g4[i] + grid.g5[i] + 
-                          grid.g6[i] + grid.g7[i] + grid.g8[i];
+        double temp = 0.0;
+
+        for (int d = 0; d < 9; ++d) {
+            temp += grid.g[d][i];
+        }
+        temperatures[i] = temp;
 
         // Find Max and Min for the graph
         if (temperatures[i] > current_max) current_max = temperatures[i];

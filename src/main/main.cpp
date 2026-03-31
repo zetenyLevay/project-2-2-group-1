@@ -62,15 +62,9 @@ int main() {
     engine.temperatures[getIndex(0,0)] = MAX_TEMP;
 
     for (int i = 0; i < CELLS; i++) {
-        engine.grid.g0[i] = weights[0] * engine.temperatures[i];
-        engine.grid.g1[i] = weights[1] * engine.temperatures[i];
-        engine.grid.g2[i] = weights[2] * engine.temperatures[i];
-        engine.grid.g3[i] = weights[3] * engine.temperatures[i];
-        engine.grid.g4[i] = weights[4] * engine.temperatures[i];
-        engine.grid.g5[i] = weights[5] * engine.temperatures[i];
-        engine.grid.g6[i] = weights[6] * engine.temperatures[i];
-        engine.grid.g7[i] = weights[7] * engine.temperatures[i];
-        engine.grid.g8[i] = weights[8] * engine.temperatures[i];
+        for (int d = 0; d < 9; ++d) {
+            engine.grid.g[d][i] = weights[d] * engine.temperatures[i];
+        }
     }
     
     // printTemperatures(temperatures, 0);
