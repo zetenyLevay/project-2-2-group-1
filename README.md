@@ -44,7 +44,7 @@ This project uses CMake for an out-of-source build, keeping compiled binaries se
     ```
 3. Generate build files using CMake:
     ``` bash
-    cmake -G "MinGW Makefiles" ..
+    cmake ..
     ```
 4. Compile the project:
     ``` bash
