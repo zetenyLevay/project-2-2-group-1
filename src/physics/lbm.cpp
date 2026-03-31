@@ -7,8 +7,6 @@ int getIndex(int x, int y) {
 }
 
 void Collision(const Grid& grid, Grid& newGrid, double heat_spread){
-    double temp = 0.0;
-
     for (int y = 0; y < HEIGHT; y++){
         for(int x = 0; x < WIDTH; x++){
             int idx= getIndex(x,y);

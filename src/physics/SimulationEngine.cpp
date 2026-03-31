@@ -8,8 +8,8 @@ SimulationEngine::SimulationEngine() {
     temperatures.resize(CELLS, 20.0); // room temp assumption
 
     time_history.push_back(current_step);
-    max_temp_history.push_back(100.0);
-    min_temp_history.push_back(20.0);
+    max_temp_history.push_back(MAX_TEMP);
+    min_temp_history.push_back(ROOM_TEMP);
 }
 
 void SimulationEngine::stepFoward() {

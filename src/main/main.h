@@ -12,6 +12,9 @@
 const int WIDTH = 3;
 const int HEIGHT = 2;
 const int CELLS = WIDTH * HEIGHT;
+// Physics constants
+const double MAX_TEMP = 100.0;
+const double ROOM_TEMP = 20.0;
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,1,-1};

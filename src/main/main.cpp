@@ -14,10 +14,6 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-// Physics constants
-const double MAX_TEMP = 100.0; // temp of top left cell
-const double ROOM_TEMP = 20.0;
-
 void runWebSocketServer(SimulationEngine& engine) {
     server ws_server;
     ws_server.clear_access_channels(websocketpp::log::alevel::all);
