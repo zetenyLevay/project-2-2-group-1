@@ -93,13 +93,21 @@ target_link_libraries(project_2_2_group_1
     asio 
     websocketpp
     Threads::Threads
-    ws2_32   # Required for MinGW / Windows networking
-    wsock32  # Required for MinGW / Windows networking
 )
+
+# Windows-specific networking libraries
+if(WIN32)
+    target_link_libraries(project_2_2_group_1 ws2_32 wsock32)
+endif()
 
 # Testing
 enable_testing()
 add_executable(test_stream tests/test_stream.cpp)
 # The test only links the math and network, skipping the heavy UI stuff
-target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads ws2_32 wsock32)
+target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads)
+
+# Windows-specific networking libraries for tests
+if(WIN32)
+    target_link_libraries(test_stream ws2_32 wsock32)
+endif()
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
