@@ -16,15 +16,21 @@ public:
     bool is_playing;
     double heat_spread;
 
+    // Information for the stats
     std::vector<double> time_history;
     std::vector<double> max_temp_history;
     std::vector<double> min_temp_history;
     std::vector<std::vector<double>> temperature_history;
 
+    // State history of the grid, so we can rewind
+    std::vector<Grid> grid_history;
+
     SimulationEngine();
 
     // Step foward one frame
     void stepFoward();
+
+    void stepBack();
 
     double getTotalEnergy() const;
 };

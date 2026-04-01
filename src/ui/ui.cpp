@@ -137,17 +137,21 @@ void startGui(SimulationEngine& engine) {
             if (ImGui::Button("Pause Simulation")) {
                 engine.is_playing = false;
             }
-        } 
-        
+        }      
         else {
             if (ImGui::Button("Play Simulation")) {
                 engine.is_playing = true;
             }
         }
         
-        if (ImGui::Button("Step Forward (1 Frame)")) {
+        if (ImGui::Button("Step Forward (One Frame)")) {
             engine.stepFoward();
         }
+
+        if (ImGui::Button("Step Back (One Frame)")) {
+            engine.stepBack();
+        }
+        
         ImGui::End();
 
         // --- Stats window ---

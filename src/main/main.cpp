@@ -35,10 +35,8 @@ void runWebSocketServer(SimulationEngine& engine) {
     ws_server.run(); 
 }
 
-
 // relaxation time for temperature spread
 const double heat_spread = 1.0;
-
 
 // Helper to print the grid cleanly (ai)
 void printTemperatures(const std::vector<double>& temps, int step) {
@@ -54,14 +52,6 @@ void printTemperatures(const std::vector<double>& temps, int step) {
 
 int main() {
     SimulationEngine engine;
-
-    engine.temperatures[getIndex(0,0)] = MAX_TEMP;
-
-    for (int i = 0; i < CELLS; i++) {
-        for (int d = 0; d < 9; ++d) {
-            engine.grid.g[d][i] = weights[d] * engine.temperatures[i];
-        }
-    }
     
     // printTemperatures(temperatures, 0);
 
