@@ -8,13 +8,14 @@
 #include <iostream>
 #include <vector>
 #include <iomanip>
+#include <memory>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-void runWebSocketServer(SimulationEngine& engine) {
+void runWebSocketServer(std::unique_ptr<SimulationEngine>& engine) {
     server ws_server;
     ws_server.clear_access_channels(websocketpp::log::alevel::all);
     ws_server.init_asio();
@@ -22,10 +23,10 @@ void runWebSocketServer(SimulationEngine& engine) {
     ws_server.set_message_handler([&](websocketpp::connection_hdl hdl, server::message_ptr msg) {
         if (msg->get_payload() == "NEXT_FRAME") {
             // Advance the physics by one frame
-            engine.stepFoward();
+            engine->stepFoward();
             
             // Send updated temperatures
-            ws_server.send(hdl, engine.temperatures.data(), engine.temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
+            ws_server.send(hdl, engine->temperatures.data(), engine->temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
         }
     });
 
@@ -39,11 +40,11 @@ void runWebSocketServer(SimulationEngine& engine) {
 const double heat_spread = 1.0;
 
 // Helper to print the grid cleanly (ai)
-void printTemperatures(const std::vector<double>& temps, int step) {
-    std::cout << "--- Time Step " << step << " ---" << std::endl;
-    for (int y = 0; y < HEIGHT; ++y) {
-        for (int x = 0; x < WIDTH; ++x) {
-            std::cout << std::fixed << std::setprecision(2) << std::setw(8) << temps[getIndex(x, y)];
+void printTemperatures(SimulationEngine& engine) {
+    std::cout << "--- Time Step " << engine.current_step << " ---" << std::endl;
+    for (int y = 0; y < engine.height; ++y) {
+        for (int x = 0; x < engine.width; ++x) {
+            std::cout << std::fixed << std::setprecision(2) << std::setw(8) << engine.temperatures[engine.getIndex(x, y)];
         }
         std::cout << std::endl;
     }
@@ -51,18 +52,15 @@ void printTemperatures(const std::vector<double>& temps, int step) {
 }
 
 int main() {
-    SimulationEngine engine;
-    
-    // printTemperatures(temperatures, 0);
+    // Default Simulation
+    auto enginePtr = std::make_unique<SimulationEngine>(3, 2);
 
-    // Mode Selector
     bool run_gui_mode = true; // Set to false to run the WebSocket server!
-
     if (run_gui_mode) {
         std::cout << "Booting Desktop UI..." << std::endl;
-        startGui(engine);
+        startGui(enginePtr);
     } else {
-        runWebSocketServer(engine);
+        runWebSocketServer(enginePtr);
     }
 
     return 0;

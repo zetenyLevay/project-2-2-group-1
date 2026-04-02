@@ -10,7 +10,7 @@
 #include <thread>
 #include <numeric>
 
-void startGui(SimulationEngine& engine) {
+void startGui(std::unique_ptr<SimulationEngine>& engine) {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -44,8 +44,8 @@ void startGui(SimulationEngine& engine) {
 
         double current_time = glfwGetTime();        
 
-        if (engine.is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
-            engine.stepFoward();
+        if (engine->is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
+            engine->stepFoward();
             
             // Reset the timer for the next tick
             last_physics_tick = current_time;
@@ -110,7 +110,7 @@ void startGui(SimulationEngine& engine) {
             ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
             
             // Force the plot to match the exact dimensions of the grid
-            ImPlot::SetupAxesLimits(0, WIDTH, HEIGHT, 0, ImGuiCond_Always);
+            ImPlot::SetupAxesLimits(0, engine->width, engine->height, 0, ImGuiCond_Always);
 
             // Change the colors 
             // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
@@ -119,11 +119,11 @@ void startGui(SimulationEngine& engine) {
 
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
-                                engine.temperatures.data(), 
-                                HEIGHT, WIDTH,
+                                engine->temperatures.data(), 
+                                engine->height, engine->width,
                                 20.0, 100.0,
                                 nullptr,       // Custom label format (nullptr hides it)
-                                ImPlotPoint(0, HEIGHT), ImPlotPoint(WIDTH, 0));
+                                ImPlotPoint(0, engine->height), ImPlotPoint(engine->width, 0));
 
             ImPlot::PopColormap();
 
@@ -133,23 +133,23 @@ void startGui(SimulationEngine& engine) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (engine.is_playing) {
+        if (engine->is_playing) {
             if (ImGui::Button("Pause Simulation")) {
-                engine.is_playing = false;
+                engine->is_playing = false;
             }
         }      
         else {
             if (ImGui::Button("Play Simulation")) {
-                engine.is_playing = true;
+                engine->is_playing = true;
             }
         }
         
         if (ImGui::Button("Step Forward (One Frame)")) {
-            engine.stepFoward();
+            engine->stepFoward();
         }
 
         if (ImGui::Button("Step Back (One Frame)")) {
-            engine.stepBack();
+            engine->stepBack();
         }
         
         ImGui::End();
@@ -165,9 +165,9 @@ void startGui(SimulationEngine& engine) {
         */
 
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", engine.temperatures[getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", engine.temperatures[getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", engine.temperatures[getIndex(2,1)]);
+        ImGui::Text("Hot Spot (0,0): %.2f C", engine->temperatures[engine->getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", engine->temperatures[engine->getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", engine->temperatures[engine->getIndex(2,1)]);
 
         // Graph for temperature
         // Example data
@@ -185,15 +185,15 @@ void startGui(SimulationEngine& engine) {
             ImPlot::SetupAxes("Time Step", "Temperature (°C)");
             
             // Make the X-Axis automatically scroll forward as time goes on
-            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (engine.current_step > 5 ? engine.current_step + 1 : 5), ImGuiCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (engine->current_step > 5 ? engine->current_step + 1 : 5), ImGuiCond_Always);
             
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", engine.time_history.data(), engine.max_temp_history.data(), engine.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", engine.time_history.data(), engine.min_temp_history.data(), engine.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", engine->time_history.data(), engine->max_temp_history.data(), engine->time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", engine->time_history.data(), engine->min_temp_history.data(), engine->time_history.size());
 
             ImPlot::EndPlot();
         }
@@ -210,12 +210,12 @@ void startGui(SimulationEngine& engine) {
         ImGui::Text("CUDA GPU: None (CPU Prototype Mode)");
 
         // 2. LBM Grid Stats
-        ImGui::Text("Grid Size: %d x %d", WIDTH, HEIGHT);
-        ImGui::Text("Memory Nodes: %d cells", CELLS);
+        ImGui::Text("Grid Size: %d x %d", engine->width, engine->height);
+        ImGui::Text("Memory Nodes: %d cells", engine->cells);
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
-        double total_energy = std::accumulate(engine.temperatures.begin(), engine.temperatures.end(), 0.0);
+        double total_energy = std::accumulate(engine->temperatures.begin(), engine->temperatures.end(), 0.0);
         ImGui::Text("Total System Energy: %.2f J", total_energy);
 
         ImGui::End();

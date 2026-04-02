@@ -8,10 +8,7 @@
 #include <vector>
 #include <array>
 
-// 1. Shared Constants
-const int WIDTH = 3;
-const int HEIGHT = 2;
-const int CELLS = WIDTH * HEIGHT;
+
 // Physics constants
 const double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
@@ -29,16 +26,11 @@ const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
 // 2. Shared Data Structure (Structure of Arrays)
 struct Grid {
     std::array<std::vector<double>, 9> g;
-    Grid() {
+    Grid(int cells) {
         for (int i = 0; i < 9; ++i) {
-            g[i].resize(CELLS, 0.0);
+            g[i].resize(cells, 0.0);
         }
     }
 };
-
-// 3. Function Declarations
-int getIndex(int x, int y);
-void Collision(const Grid& grid, Grid& TempGrid, double heat_spread);
-void stream(const Grid& TempGrid, Grid& grid);
 
 #endif //PROJECT_2_2_GROUP_1_MAIN_H

@@ -12,8 +12,9 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#include <memory>
 #include <vector>
 
-void startGui(SimulationEngine& engine);
+void startGui(std::unique_ptr<SimulationEngine>& engine);
 
 #endif //PROJECT_2_2_GROUP_1_UI_H

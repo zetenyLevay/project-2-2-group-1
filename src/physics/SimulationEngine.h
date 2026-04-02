@@ -7,6 +7,8 @@
 
 class SimulationEngine {
 public: 
+    int width, height, cells;
+
     Grid grid;
     Grid gridTemp;
     std::vector<double> temperatures;
@@ -25,14 +27,20 @@ public:
     // State history of the grid, so we can rewind
     std::vector<Grid> grid_history;
 
-    SimulationEngine();
+    SimulationEngine(int w, int h);
 
-    // Step foward one frame
+    // Helper
+    int getIndex(int x, int y);
+
+    // Step foward and back one frame
     void stepFoward();
-
     void stepBack();
 
     double getTotalEnergy() const;
+private:
+    // Physics functions
+    void Collision(double heat_spread);
+    void Stream();
 };
 
 #endif 
