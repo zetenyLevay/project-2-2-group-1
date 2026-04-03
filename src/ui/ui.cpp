@@ -85,7 +85,7 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
             ImGuiID dock_main_id = dockspace_id;
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.10f, nullptr, &dock_main_id);
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.80f, nullptr, &dock_id_right);
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.70f, nullptr, &dock_id_right);
 
             // Assign windows to those zones based on their title
             ImGui::DockBuilderDockWindow("Simulation", dock_main_id);
@@ -133,6 +133,8 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
+        ImGui::SeparatorText("Control Simulation");
+
         if (engine->is_playing) {
             if (ImGui::Button("Pause Simulation")) {
                 engine->is_playing = false;
@@ -152,17 +154,51 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
             engine->stepBack();
         }
         
+        ImGui::SeparatorText("Change Simulation");
+
+        static bool createNew = false;
+        static int w = 3; // Default values
+        static int h = 2;
+        
+        if (ImGui::Button("Create New Simulation")) {
+            createNew = true;
+        }
+
+        if (createNew) {
+            float windowWidth = ImGui::GetContentRegionAvail().x;
+            float inputWidth = (0.2f * windowWidth);
+
+            // Get width
+            ImGui::Text("Width:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(inputWidth);
+            ImGui::InputInt("##Width", &w);
+
+            // Get height
+            ImGui::SameLine();
+            ImGui::Text("Height:");
+            ImGui::SameLine();
+            ImGui::InputInt("##Height", &h);
+
+            ImGui::PopItemWidth();
+
+            if (ImGui::Button("Confirm")) {
+                // Create and display the new sim
+                engine = std::make_unique<SimulationEngine>(w, h);
+
+                createNew = false;
+            }
+        }
+
+        if (ImGui::Button("Load Simulation")) {
+  
+        }
+
         ImGui::End();
 
         // --- Stats window ---
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
-
-        /*
-        ImGui::Text("Average Temperature: 10.2°C -- 283.4K");
-        ImGui::Text("Coldest Temperature: 8.3°C -- 281.5K");
-        ImGui::Text("Warmest Temperature: 22.8°C -- 296.0K");
-        */
 
         // Live real data
         ImGui::Text("Hot Spot (0,0): %.2f C", engine->temperatures[engine->getIndex(0,0)]);
