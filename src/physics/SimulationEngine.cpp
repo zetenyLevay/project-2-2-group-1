@@ -1,5 +1,8 @@
 #include "SimulationEngine.h"
 #include <numeric>
+#include <fstream>
+#include <iostream>
+#include <filesystem>
 
 SimulationEngine::SimulationEngine(int w, int h) 
     : width(w), height(h), cells(w * h), grid(cells), gridTemp(cells)
@@ -70,7 +73,7 @@ void SimulationEngine::stepBack() {
     current_step--;
 
     // Erase most recent state
-    // WARNING: I THINK THIS WILL CAUSE ISSUES WHEN ADD THE ABILITY TO LOAD IN SIMS
+    // WARNING: I THINK THIS WILL CAUSE ISSUES WHEN ADD THE ABILITY TO LOAD IN SIMS 
     time_history.pop_back();
     max_temp_history.pop_back();
     min_temp_history.pop_back();
@@ -122,4 +125,104 @@ void SimulationEngine::Stream() {
 
 double SimulationEngine::getTotalEnergy() const {
     return std::accumulate(temperatures.begin(), temperatures.end(), 0.0);
+}
+
+bool SimulationEngine::saveSimulation(const std::string& filepath) {
+    std::filesystem::path pathObj(filepath);
+    std::filesystem::path dir = pathObj.parent_path();
+
+    if (!dir.empty() && !std::filesystem::exists(dir)) {
+        std::filesystem::create_directories(dir);
+        std::cout << "Created missing saves folder" << std::endl;
+    }
+
+    std::ofstream out(filepath, std::ios::binary);
+    if (!out.is_open()) return false;
+
+    // Write width and height
+    out.write(reinterpret_cast<const char*>(&width), sizeof(width));
+    out.write(reinterpret_cast<const char*>(&height), sizeof(height));
+
+    // Write history length
+    size_t history_count = time_history.size();
+    out.write(reinterpret_cast<const char*>(&history_count), sizeof(history_count));
+
+    // Write basic history information
+    out.write(reinterpret_cast<const char*>(time_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(max_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(min_temp_history.data()), history_count * sizeof(double));
+
+    // Write temperature history
+    for (size_t i = 0; i < history_count; ++i) {
+        out.write(reinterpret_cast<const char*>(temperature_history[i].data()), cells * sizeof(double));
+    }
+
+    // Write grid history
+    for (size_t i = 0; i < history_count; ++i) {
+        for (int d = 0; d < 9; ++d) {
+            out.write(reinterpret_cast<const char*>(grid_history[i].g[d].data()), cells * sizeof(double));
+        }
+    }
+
+    out.close();
+    return true;
+}
+
+std::unique_ptr<SimulationEngine> SimulationEngine::loadSimulation(const std::string& filepath) {
+    std::ifstream in(filepath, std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Failed to open file: " << filepath << std::endl;
+        return nullptr;
+    }
+
+    // Width and Height
+    int w, h;
+    in.read(reinterpret_cast<char*>(&w), sizeof(w));
+    in.read(reinterpret_cast<char*>(&h), sizeof(h));
+
+    // Create Engine
+    auto loadedEngine = std::make_unique<SimulationEngine>(w, h);
+
+    // Get history length
+    size_t history_count;
+    in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
+
+    // Read basic history information
+    loadedEngine->time_history.resize(history_count);
+    loadedEngine->max_temp_history.resize(history_count);
+    loadedEngine->min_temp_history.resize(history_count);
+
+    in.read(reinterpret_cast<char*>(loadedEngine->time_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(loadedEngine->max_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(loadedEngine->min_temp_history.data()), history_count * sizeof(double));
+
+    // Get full temperature history
+    loadedEngine->temperature_history.resize(history_count, std::vector<double>(loadedEngine->cells));
+    for (size_t i = 0; i < history_count; ++i) {
+        in.read(reinterpret_cast<char*>(loadedEngine->temperature_history[i].data()), loadedEngine->cells * sizeof(double));
+    }
+
+    // Clear the grid history because the engine constructer adds an initial state
+    loadedEngine->grid_history.clear();
+    loadedEngine->grid_history.reserve(history_count);
+
+    // Get full grid history
+    for (size_t i = 0; i < history_count; ++i) {
+        Grid tempGrid(loadedEngine->cells);
+
+        for (int d = 0; d < 9; ++d) {
+            in.read(reinterpret_cast<char*>(tempGrid.g[d].data()), loadedEngine->cells * sizeof(double));
+        }
+        loadedEngine->grid_history.push_back(tempGrid);
+    }
+
+    // Go to the last frame of the sim
+    if (history_count > 0) {
+        loadedEngine->current_step = loadedEngine->time_history.back();
+        loadedEngine->temperatures = loadedEngine->temperature_history.back();
+        loadedEngine->grid = loadedEngine->grid_history.back();
+    }
+
+    in.close();
+    return loadedEngine;
 }

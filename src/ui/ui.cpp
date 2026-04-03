@@ -159,13 +159,13 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
         static bool createNew = false;
         static int w = 3; // Default values
         static int h = 2;
+         float windowWidth = ImGui::GetContentRegionAvail().x;
         
         if (ImGui::Button("Create New Simulation")) {
             createNew = true;
         }
 
         if (createNew) {
-            float windowWidth = ImGui::GetContentRegionAvail().x;
             float inputWidth = (0.2f * windowWidth);
 
             // Get width
@@ -190,8 +190,32 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
             }
         }
 
+        static char filenameBuffer[256] = "sim_01.dat";
+        ImGui::Text("FileName:");
+        ImGui::SameLine();
+        ImGui::PushItemWidth(0.3f * windowWidth);
+        ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
+
+        std::string folder = "../saves/";
+        std::string path = folder + std::string(filenameBuffer);
+
+        if (ImGui::Button("Save Simulation")) {
+            if (engine->saveSimulation(path)) {
+                std::cout << "Saved to: " << path << std::endl;
+            }
+            else {
+                std::cerr << "Failed to save to: " << path << std::endl;
+            }
+        }
+
+        ImGui::SameLine();
+
         if (ImGui::Button("Load Simulation")) {
-  
+            auto loadedEngine = SimulationEngine::loadSimulation(path);
+            if (loadedEngine) {
+                engine = std::move(loadedEngine);
+                std::cout << "Loaded new simulation from: " << path << std::endl;
+            }
         }
 
         ImGui::End();

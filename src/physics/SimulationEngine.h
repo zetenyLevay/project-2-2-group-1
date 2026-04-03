@@ -4,6 +4,8 @@
 #pragma once
 #include "main.h"
 #include <vector>
+#include <string>
+#include <memory>
 
 class SimulationEngine {
 public: 
@@ -37,6 +39,9 @@ public:
     void stepBack();
 
     double getTotalEnergy() const;
+
+    bool saveSimulation(const std::string& filepath);
+    static std::unique_ptr<SimulationEngine> loadSimulation(const std::string& filepath);
 private:
     // Physics functions
     void Collision(double heat_spread);
