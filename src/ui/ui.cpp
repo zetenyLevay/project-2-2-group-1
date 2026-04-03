@@ -5,10 +5,12 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "implot.h"
+#include "portable-file-dialogs.h"
 #include <GLFW/glfw3.h> 
 #include <iostream>
 #include <thread>
 #include <numeric>
+#include <filesystem>
 
 void startGui(std::unique_ptr<SimulationEngine>& engine) {
     // First, we need to initialize GLFW which is our window manager.
@@ -230,11 +232,18 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
             }
         }
 
+        std::string absoluteFolder = std::filesystem::absolute(folder).string();
         if (ImGui::Button("Load Simulation")) {
-            auto loadedEngine = SimulationEngine::loadSimulation(path);
-            if (loadedEngine) {
-                engine = std::move(loadedEngine);
-                std::cout << "Loaded new simulation from: " << path << std::endl;
+            auto f = pfd::open_file("Choose a save", absoluteFolder, {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            
+            if (!f.result().empty()) {
+                std::string selectedPath = f.result()[0];
+
+                auto loadedEngine = SimulationEngine::loadSimulation(selectedPath);
+                if (loadedEngine) {
+                    engine = std::move(loadedEngine);
+                    std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
+                }
             }
         }
 

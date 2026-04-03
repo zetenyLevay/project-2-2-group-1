@@ -68,6 +68,7 @@ include_directories(
     vendor/imgui
     vendor/imgui/backends
     vendor/implot
+    vendor/pfd
 )
 
 add_library(simulation_logic
