@@ -159,12 +159,17 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
         static bool createNew = false;
         static int w = 3; // Default values
         static int h = 2;
-         float windowWidth = ImGui::GetContentRegionAvail().x;
+        float windowWidth = ImGui::GetContentRegionAvail().x;
         
+        // Click to open/close create dropdown
         if (ImGui::Button("Create New Simulation")) {
-            createNew = true;
+            if (!createNew) {
+                createNew = true;
+            }
+            else {
+                createNew = false;
+            }
         }
-
         if (createNew) {
             float inputWidth = (0.2f * windowWidth);
 
@@ -190,25 +195,40 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
             }
         }
 
+        static bool save = false;
         static char filenameBuffer[256] = "sim_01.dat";
-        ImGui::Text("FileName:");
-        ImGui::SameLine();
-        ImGui::PushItemWidth(0.3f * windowWidth);
-        ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
-
         std::string folder = "../saves/";
         std::string path = folder + std::string(filenameBuffer);
 
+        // Click to open/close save dropdown
         if (ImGui::Button("Save Simulation")) {
-            if (engine->saveSimulation(path)) {
-                std::cout << "Saved to: " << path << std::endl;
+            if (!save) {
+                save = true;
             }
             else {
-                std::cerr << "Failed to save to: " << path << std::endl;
+                save = false;
             }
         }
+        if (save) {
+            ImGui::Text("FileName:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(0.3f * windowWidth);
+            ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
 
-        ImGui::SameLine();
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm")) {
+                if (engine->saveSimulation(path)) {
+                    std::cout << "Saved to: " << path << std::endl;
+                }
+                else {
+                    std::cerr << "Failed to save to: " << path << std::endl;
+                }
+
+                save = false;
+            }
+        }
 
         if (ImGui::Button("Load Simulation")) {
             auto loadedEngine = SimulationEngine::loadSimulation(path);
