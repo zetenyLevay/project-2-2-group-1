@@ -36,6 +36,14 @@ int SimulationEngine::getIndex(int x, int y) {
 }
 
 void SimulationEngine::stepFoward() {
+    // If already calculated just set the grid and temperatures again 
+    if (current_step < temperature_history.size() - 1) {
+        current_step++;
+        temperatures = temperature_history[current_step];
+        grid = grid_history[current_step];
+        return;
+    }
+
     Collision(heat_spread);
     Stream();
 
@@ -72,6 +80,10 @@ void SimulationEngine::stepBack() {
     // Decrement the current step
     current_step--;
 
+    temperatures = temperature_history[current_step];
+    grid = grid_history[current_step];
+
+    /*
     // Erase most recent state
     // WARNING: I THINK THIS WILL CAUSE ISSUES WHEN ADD THE ABILITY TO LOAD IN SIMS 
     time_history.pop_back();
@@ -83,6 +95,7 @@ void SimulationEngine::stepBack() {
     // Restore previous state
     temperatures = temperature_history.back();
     grid = grid_history.back();
+    */
 }
 
 // Physics Functions (LBM)
