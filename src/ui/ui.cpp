@@ -198,9 +198,9 @@ void startGui(std::unique_ptr<SimulationEngine>& engine) {
         }
 
         static bool save = false;
-        static char filenameBuffer[256] = "sim_01.dat";
+        static char filenameBuffer[256] = "sim_01";
         std::string folder = "../saves/";
-        std::string path = folder + std::string(filenameBuffer);
+        std::string path = folder + std::string(filenameBuffer) + ".dat";
 
         // Click to open/close save dropdown
         if (ImGui::Button("Save Simulation")) {
