@@ -20,6 +20,9 @@ std::unique_ptr<SimulationEngine> createEngine(int w = 3, int h = 2) {
     switch (currentSource) {
         case DataSource::LOCAL:
             return std::make_unique<LocalEngine>(w, h);
+        default:
+            std::cerr << "Unknown data source" << std::endl;
+            return nullptr;
     }
 
 }
@@ -78,7 +81,7 @@ void launchGui() {
             else {
                 engine->stepFoward();
             }
-            
+
             // Reset the timer for the next tick
             last_physics_tick = current_time;
         }
