@@ -5,6 +5,7 @@ SimulationEngine::SimulationEngine() {
     current_step = 0;
     is_playing = false;
     heat_spread = 1.0;
+    viscosity = 0.5;
     temperatures.resize(CELLS, 20.0); // room temp assumption
     temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
 
@@ -23,7 +24,8 @@ SimulationEngine::SimulationEngine() {
 }
 
 void SimulationEngine::stepFoward() {
-    Collision(grid, gridTemp, heat_spread);
+    FluidCollision(grid,gridTemp,viscosity);
+    ThermalCollision(grid, gridTemp, heat_spread);
     stream(gridTemp, grid);
 
     double current_max = ROOM_TEMP;

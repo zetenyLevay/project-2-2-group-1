@@ -15,6 +15,7 @@ public:
     int current_step;
     bool is_playing;
     double heat_spread;
+    double viscosity;
 
     // Information for the stats
     std::vector<double> time_history;
