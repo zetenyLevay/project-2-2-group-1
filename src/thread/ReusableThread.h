@@ -37,6 +37,6 @@ class ReusableThread {
         std::thread thread;
         void threadMain();
         
-        SimulationStatePointer currentState;
+        SimulationStatePointer currentStatePtr;
         std::mutex stateMutex;
 };

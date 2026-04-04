@@ -24,7 +24,7 @@ void TaskQueue::submitTask(Task task) {
 }
 
 ReusableThread::ReusableThread(SimulationStatePointer initialState) {
-    this->currentState = initialState;
+    this->currentStatePtr = initialState;
     thread = std::thread(&ReusableThread::threadMain, this);
 }
 
@@ -33,11 +33,11 @@ void ReusableThread::submitTask(Task task) {
 }
 
 SimulationStatePointer ReusableThread::getState() {
-    SimulationStatePointer state;
+    SimulationStatePointer statePtr;
     this->stateMutex.lock();
-    state = currentState;
+    statePtr = this->currentStatePtr;
     this->stateMutex.unlock();
-    return state;
+    return statePtr;
 }
 
 void ReusableThread::threadMain() {
@@ -51,7 +51,7 @@ void ReusableThread::threadMain() {
     task(*nextState);
 
     stateMutex.lock();
-    currentState = nextState;
+    currentStatePtr = nextState;
     stateMutex.unlock();
 
     goto beginning;
