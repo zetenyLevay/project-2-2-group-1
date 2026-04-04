@@ -35,7 +35,6 @@ void startGui(DataSource source) {
 bool is_playing = false;
 
 void launchGui() {
-    std::cout << "launchGui()\n";
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -231,6 +230,8 @@ void launchGui() {
         static char filenameBuffer[256] = "sim_01";
         std::string folder = "../saves/";
         std::string path = folder + std::string(filenameBuffer) + ".dat";
+        static const char* saveTypes[] = {"Necessary", "Complete"};
+        static int selected = 0;
 
         // Click to open/close save dropdown
         if (ImGui::Button("Save Simulation")) {
@@ -242,16 +243,34 @@ void launchGui() {
             }
         }
         if (save) {
+            ImGui::PushItemWidth(0.3f * windowWidth);
+
+            // Dropdown menu for the save type
+            if (ImGui::BeginCombo("##Save Type", saveTypes[selected])) {
+                for (int i = 0; i < IM_ARRAYSIZE(saveTypes); i++) {
+                    bool is_selected = (selected == i);
+                    if (ImGui::Selectable(saveTypes[i], is_selected)) {
+                        selected = i;
+                    }
+
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            
             ImGui::Text("FileName:");
             ImGui::SameLine();
-            ImGui::PushItemWidth(0.3f * windowWidth);
             ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
 
             ImGui::PopItemWidth();
 
+            SaveType saveType = selected == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
+
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                if (saveSimulation(state, path)) {
+                if (saveSimulation(state, path, saveType)) {
                     std::cout << "Saved to: " << path << std::endl;
                 }
                 else {
@@ -292,10 +311,6 @@ void launchGui() {
         ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[engine->getIndex(2,1)]);
 
         // Graph for temperature
-        // Example data
-        static float x_time[] = { 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
-        static float y_temp[] = { 0.0f, 2.0f, 4.0f, 6.0f, 8.0f, 10.2f };
-
         // Get available width and height
         float width = ImGui::GetContentRegionAvail().x;
         float height = ImGui::GetContentRegionAvail().y;

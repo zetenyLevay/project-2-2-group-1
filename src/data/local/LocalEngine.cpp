@@ -78,6 +78,7 @@ void LocalEngine::stepBack() {
     thread->submitTask([this](SimulationState& state) {
         // Prevent going back beyond initial state
         if (state.current_step <= 0) return;
+        if (state.grid_history.size() == 0) return;
 
         // Decrement the current step
         state.current_step--;

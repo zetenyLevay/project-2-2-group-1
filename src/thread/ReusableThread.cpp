@@ -53,17 +53,12 @@ SimulationStatePointer ReusableThread::getState() {
 }
 
 std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
-    if (!this->terminateNext) {
-        std::cerr << "Dangerous! Mutable state requested when two threads are running! This could easily cause race conditions!\n";
-    }
-    
     std::shared_ptr<SimulationState> statePtr = std::const_pointer_cast<SimulationState>(this->currentStatePtr);
 
     return statePtr;
 }
 
 void ReusableThread::threadMain() {
-    std::cout << "threadMain()\n";
     beginning:
 
     Task task;
