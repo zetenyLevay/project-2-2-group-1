@@ -7,7 +7,7 @@
 
 #include <vector>
 #include <array>
-
+using namespace std;
 // 1. Shared Constants
 const int WIDTH = 3;
 const int HEIGHT = 2;
@@ -43,6 +43,7 @@ struct Grid {
 // 3. Function Declarations
 int getIndex(int x, int y);
 void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity);
+array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
 void ThermalCollision(const Grid& grid, Grid& TempGrid, double heat_spread);
 void stream(const Grid& TempGrid, Grid& grid);
 

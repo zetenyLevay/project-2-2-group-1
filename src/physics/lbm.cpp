@@ -6,7 +6,26 @@ int getIndex(int x, int y) {
     int wrappedY = (y + HEIGHT) % HEIGHT;
     return wrappedY * WIDTH + wrappedX;
 }
+void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity){
+     for (int y = 0; y < HEIGHT; y++){
+        for(int x = 0; x < WIDTH; x++){
+            int idx= getIndex(x,y);
 
+            // Calculating density of every f inside a cell
+            array<double, 3> result = getDensityAndVelocity(grid, idx);
+            double density = result[0];
+            double ux = result[1];
+            double uy = result[2];
+            
+            
+            // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
+            for (int d = 0; d < 9; ++d) {
+                double cu=cx[d]*ux + cy[d]*uy;
+                newGrid.f[d][idx] = grid.f[d][idx] - (1.0/viscosity) * (grid.f[d][idx] - weights[d] * density*(1 + cu/cs2 + (cu*cu)/(2*cs2*cs2) -(ux*ux + uy*uy)/(2*cs2)));
+            }
+        }
+    }
+}
 void ThermalCollision(const Grid& grid, Grid& newGrid, double heat_spread){
     for (int y = 0; y < HEIGHT; y++){
         for(int x = 0; x < WIDTH; x++){
@@ -31,27 +50,6 @@ void ThermalCollision(const Grid& grid, Grid& newGrid, double heat_spread){
         }
     }
 }
-void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity){
-     for (int y = 0; y < HEIGHT; y++){
-        for(int x = 0; x < WIDTH; x++){
-            int idx= getIndex(x,y);
-
-            // Calculating density of every f inside a cell
-            array<double, 3> result = getDensityAndVelocity(grid, idx);
-            double density = result[0];
-            double ux = result[1];
-            double uy = result[2];
-            
-            
-            // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
-            for (int d = 0; d < 9; ++d) {
-                double cu=cx[d]*ux + cy[d]*uy;
-                newGrid.f[d][idx] = grid.f[d][idx] - (1.0/viscosity) * (grid.f[d][idx] - weights[d] * density*(1 + cu/cs2 + (cu*cu)/(2*cs2*cs2) -(ux*ux + uy*uy)/(2*cs2)));
-            }
-        }
-    }
-}
-
 void stream(const Grid& gridOld, Grid& gridNew) {
     for(int y = 0; y < HEIGHT; y++) {
         for (int x = 0; x < WIDTH; x++) {

@@ -5,7 +5,7 @@ SimulationEngine::SimulationEngine() {
     current_step = 0;
     is_playing = false;
     heat_spread = 1.0;
-    viscosity = 0.5;
+    viscosity = 0.3;
     temperatures.resize(CELLS, 20.0); // room temp assumption
     temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
 
@@ -13,6 +13,8 @@ SimulationEngine::SimulationEngine() {
     for (int i = 0; i < CELLS; i++) {
         for (int d = 0; d < 9; ++d) {
             grid.g[d][i] = weights[d] * temperatures[i];
+
+            grid.f[d][i] = weights[d] * 1.0;
         }
     }
 
