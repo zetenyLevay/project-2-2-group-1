@@ -341,6 +341,29 @@ void launchGui() {
             ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
             ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
 
+            // Time step marker
+            if (!state.time_history.empty() && state.current_step < state.time_history.size()) {
+                // Get the current time, max and min
+                double cur_time = state.time_history[state.current_step];
+                double cur_max = state.max_temp_history[state.current_step];
+                double cur_min = state.min_temp_history[state.current_step];
+
+                ImPlotSpec specLine;
+                specLine.LineColor = ImVec4(0.7f, 0.7f, 0.7f, 0.6f); // Grey
+                specLine.LineWeight = 1.5f;
+                ImPlot::PlotInfLines("##CurrentTime", &cur_time, 1, specLine);
+
+                double x_dots[2] = {cur_time, cur_time};
+                double y_dots[2] = {cur_max, cur_min};
+
+                ImPlotSpec specDots;
+                specDots.Marker = ImPlotMarker_Circle; // Make it a circle
+                specDots.MarkerSize = 4.0f;
+                specDots.MarkerFillColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
+                specDots.MarkerLineColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
+                ImPlot::PlotScatter("##CurrentTimeDots", x_dots, y_dots, 2, specDots);
+            }
+
             ImPlot::EndPlot();
         }
 
