@@ -6,6 +6,7 @@ int getIndex(int x, int y) {
     return wrappedY * WIDTH + wrappedX;
 }
 
+// Mutates newGrid
 void Collision(const Grid& grid, Grid& newGrid, double heat_spread){
     for (int y = 0; y < HEIGHT; y++){
         for(int x = 0; x < WIDTH; x++){

@@ -1,19 +1,17 @@
-#ifndef PROJECT_2_2_GROUP_1_SIMULATIONENGINE_H
-#define PROJECT_2_2_GROUP_1_SIMULATIONENGINE_H
-
 #pragma once
 #include "main.h"
+
+struct SimulationState;
+
+#include "../thread/ReusableThread.h"
 #include <vector>
 
-class SimulationEngine {
-public: 
+struct SimulationState {
     Grid grid;
-    Grid gridTemp;
     std::vector<double> temperatures;
 
     // State Checks
     int current_step;
-    bool is_playing;
     double heat_spread;
 
     // Information for the stats
@@ -24,15 +22,25 @@ public:
 
     // State history of the grid, so we can rewind
     std::vector<Grid> grid_history;
-
-    SimulationEngine();
-
-    // Step foward one frame
-    void stepFoward();
-
-    void stepBack();
-
-    double getTotalEnergy() const;
 };
 
-#endif 
+class SimulationEngine {
+public:
+    std::unique_ptr<ReusableThread> thread;
+
+    std::shared_ptr<const SimulationState> getState();
+
+    SimulationEngine() = default;
+    virtual ~SimulationEngine() = default;
+
+    // Step foward one frame
+    virtual void stepFoward() = 0;
+
+    virtual void stepBack() = 0;
+
+    virtual double getTotalEnergy() const = 0;
+};
+
+enum DataSource {
+    LOCAL
+};

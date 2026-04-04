@@ -1,10 +1,6 @@
-//
-// Created by levay on 3/23/2026.
-//
-
 #include "main.h"
 #include "ui.h"
-#include "SimulationEngine.h"
+#include "../data/local/LocalEngine.h"
 #include <iostream>
 #include <vector>
 #include <iomanip>
@@ -14,7 +10,7 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
-void runWebSocketServer(SimulationEngine& engine) {
+void runWebSocketServer(LocalEngine& engine) {
     server ws_server;
     ws_server.clear_access_channels(websocketpp::log::alevel::all);
     ws_server.init_asio();
@@ -23,9 +19,11 @@ void runWebSocketServer(SimulationEngine& engine) {
         if (msg->get_payload() == "NEXT_FRAME") {
             // Advance the physics by one frame
             engine.stepFoward();
+
+            auto state = engine.getState();
             
             // Send updated temperatures
-            ws_server.send(hdl, engine.temperatures.data(), engine.temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
+            ws_server.send(hdl, state->temperatures.data(), state->temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
         }
     });
 
@@ -51,8 +49,6 @@ void printTemperatures(const std::vector<double>& temps, int step) {
 }
 
 int main() {
-    SimulationEngine engine;
-    
     // printTemperatures(temperatures, 0);
 
     // Mode Selector
@@ -60,9 +56,10 @@ int main() {
 
     if (run_gui_mode) {
         std::cout << "Booting Desktop UI..." << std::endl;
-        startGui(engine);
+        startGui(DataSource::LOCAL);
     } else {
-        runWebSocketServer(engine);
+        // TODO: Fix web socket call
+        //runWebSocketServer(engine);
     }
 
     return 0;

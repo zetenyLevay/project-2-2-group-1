@@ -71,9 +71,17 @@ include_directories(
 )
 
 add_library(simulation_logic
-    src/physics/lbm.cpp
-    src/physics/SimulationEngine.cpp
-    src/physics/SimulationEngine.h
+    src/data/local/lbm.cpp
+
+    src/data/SimulationEngine.cpp
+    src/data/SimulationEngine.h
+
+    src/data/local/LocalEngine.cpp
+    src/data/local/LocalEngine.h
+
+    src/thread/ReusableThread.cpp
+    src/thread/ReusableThread.h
+
     src/main/main.h
 )
 

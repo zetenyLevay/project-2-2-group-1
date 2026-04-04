@@ -1,5 +1,5 @@
 #include "ui.h"
-#include "SimulationEngine.h"
+#include "../data/local/LocalEngine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "backends/imgui_impl_glfw.h"
@@ -9,8 +9,19 @@
 #include <iostream>
 #include <thread>
 #include <numeric>
+#include <functional>
 
-void startGui(SimulationEngine& engine) {
+void startGui(DataSource source) {
+    switch (source) {
+        case DataSource::LOCAL:
+            LocalEngine engine;
+            launchGui(engine);
+    }
+}
+
+bool is_playing = false;
+
+void launchGui(SimulationEngine& engine) {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -42,14 +53,17 @@ void startGui(SimulationEngine& engine) {
     while(!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
-        double current_time = glfwGetTime();        
-
-        if (engine.is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
+        double current_time = glfwGetTime();
+        
+        SimulationState state = *engine.getState();
+        
+        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
             engine.stepFoward();
             
             // Reset the timer for the next tick
             last_physics_tick = current_time;
         }
+        
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -119,7 +133,7 @@ void startGui(SimulationEngine& engine) {
 
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
-                                engine.temperatures.data(), 
+                                state.temperatures.data(), 
                                 HEIGHT, WIDTH,
                                 20.0, 100.0,
                                 nullptr,       // Custom label format (nullptr hides it)
@@ -133,14 +147,14 @@ void startGui(SimulationEngine& engine) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (engine.is_playing) {
+        if (is_playing) {
             if (ImGui::Button("Pause Simulation")) {
-                engine.is_playing = false;
+                is_playing = false;
             }
         }      
         else {
             if (ImGui::Button("Play Simulation")) {
-                engine.is_playing = true;
+                is_playing = true;
             }
         }
         
@@ -165,9 +179,9 @@ void startGui(SimulationEngine& engine) {
         */
 
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", engine.temperatures[getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", engine.temperatures[getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", engine.temperatures[getIndex(2,1)]);
+        ImGui::Text("Hot Spot (0,0): %.2f C", state.temperatures[getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", state.temperatures[getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[getIndex(2,1)]);
 
         // Graph for temperature
         // Example data
@@ -185,15 +199,15 @@ void startGui(SimulationEngine& engine) {
             ImPlot::SetupAxes("Time Step", "Temperature (°C)");
             
             // Make the X-Axis automatically scroll forward as time goes on
-            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (engine.current_step > 5 ? engine.current_step + 1 : 5), ImGuiCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (state.current_step > 5 ? state.current_step + 1 : 5), ImGuiCond_Always);
             
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", engine.time_history.data(), engine.max_temp_history.data(), engine.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", engine.time_history.data(), engine.min_temp_history.data(), engine.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
 
             ImPlot::EndPlot();
         }
@@ -215,7 +229,7 @@ void startGui(SimulationEngine& engine) {
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
-        double total_energy = std::accumulate(engine.temperatures.begin(), engine.temperatures.end(), 0.0);
+        double total_energy = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Energy: %.2f J", total_energy);
 
         ImGui::End();
