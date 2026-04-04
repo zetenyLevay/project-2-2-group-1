@@ -45,7 +45,16 @@ void LocalEngine::stepFoward() {
         if (state.current_step < state.temperature_history.size() - 1) {
             state.current_step++;
             state.temperatures = state.temperature_history[state.current_step];
-            state.grid = state.grid_history[state.current_step];
+
+            // Only pull from grid_history if it exists (Necessary loads dont have grid history)
+            if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
+                state.grid = state.grid_history[state.current_step];
+            }
+            return;
+        }
+
+        if (state.grid_history.empty()) {
+            std::cout << "You have loaded a 'Necessary' save, you cannot compute new frames" << std::endl;
             return;
         }
 
@@ -55,7 +64,7 @@ void LocalEngine::stepFoward() {
         this->Stream(gridTemp, state.grid);
 
         double current_max = ROOM_TEMP;
-        double current_min = MAX_TEMP; // Assuming max 100 is possible
+        double current_min = MAX_TEMP;
 
         for (int i = 0; i < cells; i++) {
             double temp = 0.0;
@@ -86,13 +95,16 @@ void LocalEngine::stepBack() {
     thread->submitTask([this](SimulationState& state) {
         // Prevent going back beyond initial state
         if (state.current_step <= 0) return;
-        if (state.grid_history.size() == 0) return;
-
+    
         // Decrement the current step
         state.current_step--;
 
         state.temperatures = state.temperature_history[state.current_step];
-        state.grid = state.grid_history[state.current_step];
+
+        // Only pull from grid_history if it exists (Necessary loads dont have grid history)
+        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
+            state.grid = state.grid_history[state.current_step];
+        }
         
         /* 
         // Erase most recent state
