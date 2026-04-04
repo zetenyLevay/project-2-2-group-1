@@ -31,9 +31,15 @@ class ReusableThread {
 
         SimulationStatePointer getState();
 
+        std::shared_ptr<SimulationState> getMutableState();
+
         ReusableThread(SimulationStatePointer initialState);
 
+        void terminate();
+
         private:
+        bool terminateNext = false;
+        
         std::thread thread;
         void threadMain();
         

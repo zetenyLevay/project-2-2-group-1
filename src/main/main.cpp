@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <iomanip>
+#include <memory>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
@@ -36,24 +37,11 @@ void runWebSocketServer(LocalEngine& engine) {
 // relaxation time for temperature spread
 const double heat_spread = 1.0;
 
-// Helper to print the grid cleanly (ai)
-void printTemperatures(const std::vector<double>& temps, int step) {
-    std::cout << "--- Time Step " << step << " ---" << std::endl;
-    for (int y = 0; y < HEIGHT; ++y) {
-        for (int x = 0; x < WIDTH; ++x) {
-            std::cout << std::fixed << std::setprecision(2) << std::setw(8) << temps[getIndex(x, y)];
-        }
-        std::cout << std::endl;
-    }
-    std::cout << std::endl;
-}
+// I removed printTemperatures() because I didn't want to put in the effort of porting it to use SimulationState
 
 int main() {
-    // printTemperatures(temperatures, 0);
-
     // Mode Selector
     bool run_gui_mode = true; // Set to false to run the WebSocket server!
-
     if (run_gui_mode) {
         std::cout << "Booting Desktop UI..." << std::endl;
         startGui(DataSource::LOCAL);

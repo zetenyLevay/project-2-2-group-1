@@ -23,6 +23,18 @@ void TaskQueue::submitTask(Task task) {
     this->taskMutex.unlock();
 }
 
+void ReusableThread::terminate() {
+    if (this->terminateNext == true) return;
+
+    this->terminateNext = true;
+
+    if (this->thread.get_id() == std::this_thread::get_id()) {
+        std::cerr << "uh oh, tried to terminate own thread, this is a deadlock!!!\n";
+    }
+
+    this->thread.join();
+}
+
 ReusableThread::ReusableThread(SimulationStatePointer initialState) {
     this->currentStatePtr = initialState;
     thread = std::thread(&ReusableThread::threadMain, this);
@@ -40,11 +52,26 @@ SimulationStatePointer ReusableThread::getState() {
     return statePtr;
 }
 
+std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
+    if (!this->terminateNext) {
+        std::cerr << "Dangerous! Mutable state requested when two threads are running! This could easily cause race conditions!\n";
+    }
+    
+    std::shared_ptr<SimulationState> statePtr = std::const_pointer_cast<SimulationState>(this->currentStatePtr);
+
+    return statePtr;
+}
+
 void ReusableThread::threadMain() {
+    std::cout << "threadMain()\n";
     beginning:
 
     Task task;
-    while ((task = this->taskQueue.getNextTask()) == nullptr) {}
+    while (((task = this->taskQueue.getNextTask()) == nullptr) && !this->terminateNext) {}
+
+    if (terminateNext) {
+        return;
+    }
 
     auto previousState = this->getState();
     auto nextState = std::make_shared<SimulationState>(*previousState);

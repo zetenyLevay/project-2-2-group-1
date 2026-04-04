@@ -5,23 +5,37 @@
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "implot.h"
+#include "portable-file-dialogs.h"
 #include <GLFW/glfw3.h> 
 #include <iostream>
 #include <thread>
 #include <numeric>
+#include <filesystem>
 #include <functional>
 
-void startGui(DataSource source) {
-    switch (source) {
+DataSource currentSource;
+std::unique_ptr<SimulationEngine> engine;
+std::unique_ptr<SimulationEngine> createEngine(int w = 3, int h = 2) {
+
+    switch (currentSource) {
         case DataSource::LOCAL:
-            LocalEngine engine;
-            launchGui(engine);
+            return std::make_unique<LocalEngine>(w, h);
     }
+
+}
+
+void startGui(DataSource source) {
+    currentSource = source;
+
+    engine = createEngine(3, 2);
+
+    launchGui();
 }
 
 bool is_playing = false;
 
-void launchGui(SimulationEngine& engine) {
+void launchGui() {
+    std::cout << "launchGui()\n";
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -50,15 +64,15 @@ void launchGui(SimulationEngine& engine) {
     double physics_tick_rate = 0.5; // Run 1 physics step every 0.5 seconds
 
     // The main loop
-    while(!glfwWindowShouldClose(window)) {
+    while(!glfwWindowShouldClose(window)) { 
         glfwPollEvents();
 
         double current_time = glfwGetTime();
         
-        SimulationState state = *engine.getState();
+        SimulationState state = *engine->getState();
         
         if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
-            engine.stepFoward();
+            engine->stepFoward();
             
             // Reset the timer for the next tick
             last_physics_tick = current_time;
@@ -99,7 +113,7 @@ void launchGui(SimulationEngine& engine) {
             ImGuiID dock_main_id = dockspace_id;
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.10f, nullptr, &dock_main_id);
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.80f, nullptr, &dock_id_right);
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.70f, nullptr, &dock_id_right);
 
             // Assign windows to those zones based on their title
             ImGui::DockBuilderDockWindow("Simulation", dock_main_id);
@@ -124,7 +138,7 @@ void launchGui(SimulationEngine& engine) {
             ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
             
             // Force the plot to match the exact dimensions of the grid
-            ImPlot::SetupAxesLimits(0, WIDTH, HEIGHT, 0, ImGuiCond_Always);
+            ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
 
             // Change the colors 
             // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
@@ -134,10 +148,10 @@ void launchGui(SimulationEngine& engine) {
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
-                                HEIGHT, WIDTH,
+                                state.height, state.width,
                                 20.0, 100.0,
                                 nullptr,       // Custom label format (nullptr hides it)
-                                ImPlotPoint(0, HEIGHT), ImPlotPoint(WIDTH, 0));
+                                ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
             ImPlot::PopColormap();
 
@@ -147,6 +161,9 @@ void launchGui(SimulationEngine& engine) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
+
+        ImGui::SeparatorText("Control Simulation");
+
         if (is_playing) {
             if (ImGui::Button("Pause Simulation")) {
                 is_playing = false;
@@ -159,29 +176,120 @@ void launchGui(SimulationEngine& engine) {
         }
         
         if (ImGui::Button("Step Forward (One Frame)")) {
-            engine.stepFoward();
+            engine->stepFoward();
         }
 
         if (ImGui::Button("Step Back (One Frame)")) {
-            engine.stepBack();
+            engine->stepBack();
         }
         
+        ImGui::SeparatorText("Change Simulation");
+
+        static bool createNew = false;
+        static int w = 3; // Default values
+        static int h = 2;
+        float windowWidth = ImGui::GetContentRegionAvail().x;
+        
+        // Click to open/close create dropdown
+        if (ImGui::Button("Create New Simulation")) {
+            if (!createNew) {
+                createNew = true;
+            }
+            else {
+                createNew = false;
+            }
+        }
+        if (createNew) {
+            float inputWidth = (0.2f * windowWidth);
+
+            // Get width
+            ImGui::Text("Width:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(inputWidth);
+            ImGui::InputInt("##Width", &w);
+
+            // Get height
+            ImGui::SameLine();
+            ImGui::Text("Height:");
+            ImGui::SameLine();
+            ImGui::InputInt("##Height", &h);
+
+            ImGui::PopItemWidth();
+
+            if (ImGui::Button("Confirm")) {
+                // Kill the compute thread.
+                engine->thread->terminate();
+
+                // Create and display the new sim
+                engine = std::move(createEngine(w, h));
+
+                createNew = false;
+            }
+        }
+
+        static bool save = false;
+        static char filenameBuffer[256] = "sim_01";
+        std::string folder = "../saves/";
+        std::string path = folder + std::string(filenameBuffer) + ".dat";
+
+        // Click to open/close save dropdown
+        if (ImGui::Button("Save Simulation")) {
+            if (!save) {
+                save = true;
+            }
+            else {
+                save = false;
+            }
+        }
+        if (save) {
+            ImGui::Text("FileName:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(0.3f * windowWidth);
+            ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
+
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm")) {
+                if (saveSimulation(state, path)) {
+                    std::cout << "Saved to: " << path << std::endl;
+                }
+                else {
+                    std::cerr << "Failed to save to: " << path << std::endl;
+                }
+
+                save = false;
+            }
+        }
+
+        if (ImGui::Button("Load Simulation")) {
+            auto f = pfd::open_file("Choose a save", "", {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            
+            if (!f.result().empty()) {
+                std::string selectedPath = f.result()[0];
+
+                switch (currentSource) {
+                    case DataSource::LOCAL:
+                        engine->thread->terminate();
+                        auto loadedEngine = loadLocalSimulation(selectedPath);
+                        if (loadedEngine) {
+                            engine = std::move(loadedEngine);
+                            std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
+                        }
+                }
+            }
+        }
+
         ImGui::End();
 
         // --- Stats window ---
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        /*
-        ImGui::Text("Average Temperature: 10.2°C -- 283.4K");
-        ImGui::Text("Coldest Temperature: 8.3°C -- 281.5K");
-        ImGui::Text("Warmest Temperature: 22.8°C -- 296.0K");
-        */
-
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", state.temperatures[getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", state.temperatures[getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[getIndex(2,1)]);
+        ImGui::Text("Hot Spot (0,0): %.2f C", state.temperatures[engine->getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", state.temperatures[engine->getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[engine->getIndex(2,1)]);
 
         // Graph for temperature
         // Example data
@@ -224,8 +332,8 @@ void launchGui(SimulationEngine& engine) {
         ImGui::Text("CUDA GPU: None (CPU Prototype Mode)");
 
         // 2. LBM Grid Stats
-        ImGui::Text("Grid Size: %d x %d", WIDTH, HEIGHT);
-        ImGui::Text("Memory Nodes: %d cells", CELLS);
+        ImGui::Text("Grid Size: %d x %d", engine->width, engine->height);
+        ImGui::Text("Memory Nodes: %d cells", engine->cells);
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost

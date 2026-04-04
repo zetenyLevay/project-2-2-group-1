@@ -5,10 +5,16 @@ struct SimulationState;
 
 #include "../thread/ReusableThread.h"
 #include <vector>
+#include <string>
+#include <memory>
 
 struct SimulationState {
+    int width, height, cells;
     Grid grid;
     std::vector<double> temperatures;
+
+    // Make grid default size 0.
+    SimulationState(): grid(0) {}
 
     // State Checks
     int current_step;
@@ -26,19 +32,24 @@ struct SimulationState {
 
 class SimulationEngine {
 public:
+    int width, height, cells;
+
     std::unique_ptr<ReusableThread> thread;
 
     std::shared_ptr<const SimulationState> getState();
 
-    SimulationEngine() = default;
+    std::shared_ptr<SimulationState> getMutableState();
+
+    SimulationEngine(int w, int h);
+
+    const int getIndex(int x, int y);
+
     virtual ~SimulationEngine() = default;
 
     // Step foward one frame
     virtual void stepFoward() = 0;
 
     virtual void stepBack() = 0;
-
-    virtual double getTotalEnergy() const = 0;
 };
 
 enum DataSource {

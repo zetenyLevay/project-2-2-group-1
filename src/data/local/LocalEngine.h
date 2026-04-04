@@ -5,7 +5,7 @@
 
 class LocalEngine : public SimulationEngine {
 public:
-    LocalEngine();
+    LocalEngine(int w, int h);
 
     // Step foward one frame
     void stepFoward();
@@ -13,4 +13,16 @@ public:
     void stepBack();
 
     double getTotalEnergy() const;
+
+    // Physics functions
+    void Collision(double heat_spread, Grid& gridTemp, const Grid grid);
+    void Stream(const Grid gridTemp, Grid &grid);
 };
+
+enum SaveType {
+    NECESSARY,
+    COMPLETE
+};
+
+std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
+bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType = SaveType::COMPLETE);

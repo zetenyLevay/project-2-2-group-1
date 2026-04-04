@@ -68,11 +68,10 @@ include_directories(
     vendor/imgui
     vendor/imgui/backends
     vendor/implot
+    vendor/pfd
 )
 
 add_library(simulation_logic
-    src/data/local/lbm.cpp
-
     src/data/SimulationEngine.cpp
     src/data/SimulationEngine.h
 
