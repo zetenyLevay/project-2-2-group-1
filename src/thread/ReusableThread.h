@@ -5,6 +5,8 @@
 #include <functional>
 #include <main.h>
 #include <queue>
+#include <memory>
+#include <mutex>
 
 class ReusableThread;
 
