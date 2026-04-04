@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <string.h>
 
 SimulationEngine::SimulationEngine(int w, int h) 
     : width(w), height(h), cells(w * h), grid(cells), gridTemp(cells)
@@ -140,7 +141,7 @@ double SimulationEngine::getTotalEnergy() const {
     return std::accumulate(temperatures.begin(), temperatures.end(), 0.0);
 }
 
-bool SimulationEngine::saveSimulation(const std::string& filepath) {
+bool SimulationEngine::saveSimulation(const std::string& filepath, const char* saveType) {
     std::filesystem::path pathObj(filepath);
     std::filesystem::path dir = pathObj.parent_path();
 
@@ -151,6 +152,9 @@ bool SimulationEngine::saveSimulation(const std::string& filepath) {
 
     std::ofstream out(filepath, std::ios::binary);
     if (!out.is_open()) return false;
+
+    // Write the type of save
+    out.write(reinterpret_cast<const char*>(&saveType), sizeof(saveType));
 
     // Write width and height
     out.write(reinterpret_cast<const char*>(&width), sizeof(width));
@@ -170,10 +174,12 @@ bool SimulationEngine::saveSimulation(const std::string& filepath) {
         out.write(reinterpret_cast<const char*>(temperature_history[i].data()), cells * sizeof(double));
     }
 
-    // Write grid history
-    for (size_t i = 0; i < history_count; ++i) {
-        for (int d = 0; d < 9; ++d) {
-            out.write(reinterpret_cast<const char*>(grid_history[i].g[d].data()), cells * sizeof(double));
+    if (strcmp(saveType, "Complete") == 0) {
+        // Write grid history
+        for (size_t i = 0; i < history_count; ++i) {
+            for (int d = 0; d < 9; ++d) {
+                out.write(reinterpret_cast<const char*>(grid_history[i].g[d].data()), cells * sizeof(double));
+            }
         }
     }
 
@@ -187,6 +193,10 @@ std::unique_ptr<SimulationEngine> SimulationEngine::loadSimulation(const std::st
         std::cerr << "Failed to open file: " << filepath << std::endl;
         return nullptr;
     }
+
+    // Savetype
+    char* saveType;
+    in.read(reinterpret_cast<char*>(&saveType), sizeof(saveType));
 
     // Width and Height
     int w, h;
@@ -217,23 +227,29 @@ std::unique_ptr<SimulationEngine> SimulationEngine::loadSimulation(const std::st
 
     // Clear the grid history because the engine constructer adds an initial state
     loadedEngine->grid_history.clear();
-    loadedEngine->grid_history.reserve(history_count);
 
-    // Get full grid history
-    for (size_t i = 0; i < history_count; ++i) {
-        Grid tempGrid(loadedEngine->cells);
+    if (strcmp(saveType, "Complete") == 0) {
+        loadedEngine->grid_history.reserve(history_count);
+
+        // Get full grid history
+        for (size_t i = 0; i < history_count; ++i) {
+            Grid tempGrid(loadedEngine->cells);
 
         for (int d = 0; d < 9; ++d) {
             in.read(reinterpret_cast<char*>(tempGrid.g[d].data()), loadedEngine->cells * sizeof(double));
         }
         loadedEngine->grid_history.push_back(tempGrid);
     }
-
+    }
+    
     // Go to the last frame of the sim
     if (history_count > 0) {
         loadedEngine->current_step = loadedEngine->time_history.back();
         loadedEngine->temperatures = loadedEngine->temperature_history.back();
-        loadedEngine->grid = loadedEngine->grid_history.back();
+
+        if (strcmp(saveType, "Complete") == 0) {
+            loadedEngine->grid = loadedEngine->grid_history.back();
+        }
     }
 
     in.close();

@@ -40,7 +40,7 @@ public:
 
     double getTotalEnergy() const;
 
-    bool saveSimulation(const std::string& filepath);
+    bool saveSimulation(const std::string& filepath, const char* saveType);
     static std::unique_ptr<SimulationEngine> loadSimulation(const std::string& filepath);
 private:
     // Physics functions
