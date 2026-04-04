@@ -78,3 +78,7 @@ void ReusableThread::threadMain() {
 
     goto beginning;
 }
+
+ReusableThread::~ReusableThread() {
+    this->terminate();
+}

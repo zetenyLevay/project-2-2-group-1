@@ -37,6 +37,8 @@ class ReusableThread {
 
         ReusableThread(SimulationStatePointer initialState);
 
+        ~ReusableThread();
+
         void terminate();
 
         private:
