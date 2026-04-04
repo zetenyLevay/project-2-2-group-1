@@ -41,35 +41,43 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
 // Mutates: grid, temperatures, current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history
 void LocalEngine::stepFoward() {
     thread->submitTask([this](SimulationState& state) {
-            Grid gridTemp(state.cells);
-            this->Collision(state.heat_spread, gridTemp, state.grid);
-
-            this->Stream(gridTemp, state.grid);
-
-            double current_max = ROOM_TEMP;
-            double current_min = MAX_TEMP; // Assuming max 100 is possible
-
-            for (int i = 0; i < cells; i++) {
-                double temp = 0.0;
-
-                for (int d = 0; d < 9; ++d) {
-                    temp += state.grid.g[d][i];
-                }
-                state.temperatures[i] = temp;
-
-                // Find Max and Min for the graph
-                if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
-                if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
-            }
-
+        // If already calculated just set the grid and temperatures again 
+        if (state.current_step < state.temperature_history.size() - 1) {
             state.current_step++;
-            state.time_history.push_back(state.current_step);
-            state.max_temp_history.push_back(current_max);
-            state.min_temp_history.push_back(current_min);
-            state.temperature_history.push_back(state.temperatures);
+            state.temperatures = state.temperature_history[state.current_step];
+            state.grid = state.grid_history[state.current_step];
+            return;
+        }
 
-            // Save grid state
-            state.grid_history.push_back(state.grid);
+        Grid gridTemp(state.cells);
+        this->Collision(state.heat_spread, gridTemp, state.grid);
+
+        this->Stream(gridTemp, state.grid);
+
+        double current_max = ROOM_TEMP;
+        double current_min = MAX_TEMP; // Assuming max 100 is possible
+
+        for (int i = 0; i < cells; i++) {
+            double temp = 0.0;
+
+            for (int d = 0; d < 9; ++d) {
+                temp += state.grid.g[d][i];
+            }
+            state.temperatures[i] = temp;
+
+            // Find Max and Min for the graph
+            if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
+            if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
+        }
+
+        state.current_step++;
+        state.time_history.push_back(state.current_step);
+        state.max_temp_history.push_back(current_max);
+        state.min_temp_history.push_back(current_min);
+        state.temperature_history.push_back(state.temperatures);
+
+        // Save grid state
+        state.grid_history.push_back(state.grid);
     });
 }
 
@@ -85,7 +93,8 @@ void LocalEngine::stepBack() {
 
         state.temperatures = state.temperature_history[state.current_step];
         state.grid = state.grid_history[state.current_step];
-
+        
+        /* 
         // Erase most recent state
         // WARNING: I THINK THIS WILL CAUSE ISSUES WHEN ADD THE ABILITY TO LOAD IN SIMS
         state.time_history.pop_back();
@@ -97,6 +106,7 @@ void LocalEngine::stepBack() {
         // Restore previous state
         state.temperatures = state.temperature_history.back();
         state.grid = state.grid_history.back();
+        */
     });
 }
 
