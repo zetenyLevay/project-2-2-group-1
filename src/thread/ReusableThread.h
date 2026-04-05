@@ -19,8 +19,11 @@ class TaskQueue {
     public:
         void submitTask(Task task);
         Task getNextTask();
+        void stop();
     
     private:
+        bool stopping = false;
+        std::condition_variable condition;
         std::mutex taskMutex;
         std::queue<Task> queue;
 };
@@ -46,7 +49,7 @@ class ReusableThread {
         
         std::thread thread;
         void threadMain();
-        
+
         SimulationStatePointer currentStatePtr;
         std::mutex stateMutex;
 };
