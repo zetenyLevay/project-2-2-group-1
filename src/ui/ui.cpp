@@ -224,6 +224,7 @@ void launchGui() {
 
             ImGui::PopItemWidth();
 
+            ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
                 // Kill the compute thread.
                 engine->thread->terminate();
