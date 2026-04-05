@@ -17,8 +17,8 @@ public:
     double getTotalEnergy() const;
 
     // Physics functions
-    void Collision(double heat_spread, Grid& gridTemp, const Grid grid);
-    void Stream(const Grid gridTemp, Grid &grid);
+    void Collision(double heat_spread, Grid& gridNew, Grid &gridOld);
+    void Stream(Grid &gridOld, Grid &gridNew);
 };
 
 enum SaveType {

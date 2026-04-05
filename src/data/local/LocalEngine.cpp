@@ -147,7 +147,7 @@ double LocalEngine::getTotalEnergy() const {
 
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
-void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid){
+void LocalEngine::Collision(double heat_spread, Grid& gridNew, Grid &gridOld){
     for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
             int idx= getIndex(x,y);
@@ -155,7 +155,7 @@ void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid)
             // Calculating temperature of every g inside a cell
             double temp = 0.0;
             for (int d = 0; d < 9; ++d) {
-                temp += grid.g[d][idx];
+                temp += gridOld.g[d][idx];
             }
 
             // to prevent floating point precision problems
@@ -173,13 +173,13 @@ void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid)
 
             // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
-                gridTemp.g[d][idx] = grid.g[d][idx] - (1.0/heat_spread) * (grid.g[d][idx] - newTemps[d]);
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - newTemps[d]);
             }
         }
     }
 }
 
-void LocalEngine::Stream(const Grid gridTemp, Grid &grid) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
     for(int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             // Current cell 1D index
@@ -190,8 +190,22 @@ void LocalEngine::Stream(const Grid gridTemp, Grid &grid) {
             // from the old grid current index
             // to the new grid neighbor index
             for (int d = 0; d < 9; ++d) {
-                int nindex = getIndex(x + cx[d], y + cy[d]);
-                grid.g[d][nindex] = gridTemp.g[d][currentIndex];
+
+
+                int sourceX = x - cx[d];
+                int sourceY = y - cy[d];
+
+                // check if the next x and y are in bound
+                if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height) {
+
+                    int sourceIndex = getIndex(sourceX, sourceY);
+                    gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
+                }
+                // if not in bound take the opposite direction (hits wall on the west, goes east instead)
+                else {
+                    int oppositeDir = inv[d];
+                    gridNew.g[d][currentIndex] = gridOld.g[oppositeDir][currentIndex];
+                }
             }
         }
     }
