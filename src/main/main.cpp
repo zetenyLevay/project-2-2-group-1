@@ -1,6 +1,5 @@
 #include "main.h"
 #include "ui.h"
-#include "selectMenu.h"
 #include "../data/local/LocalEngine.h"
 #include <iostream>
 #include <vector>
@@ -45,8 +44,7 @@ int main() {
     bool run_gui_mode = true; // Set to false to run the WebSocket server!
     if (run_gui_mode) {
         std::cout << "Booting Desktop UI..." << std::endl;
-        //startGui(DataSource::LOCAL);
-        launchSelectMenu();
+        startGui(DataSource::LOCAL);
     } else {
         // TODO: Fix web socket call
         //runWebSocketServer(engine);

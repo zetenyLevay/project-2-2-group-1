@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "../data/local/LocalEngine.h"
+#include "../data/BatchRunner.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "backends/imgui_impl_glfw.h"
@@ -121,7 +122,7 @@ void launchGui() {
             ImGuiID dock_main_id = dockspace_id;
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.10f, nullptr, &dock_main_id);
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.70f, nullptr, &dock_id_right);
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.65f, nullptr, &dock_id_right);
 
             // Assign windows to those zones based on their title
             ImGui::DockBuilderDockWindow("Simulation", dock_main_id);
@@ -197,6 +198,7 @@ void launchGui() {
         static int w = 3; // Default values
         static int h = 2;
         float windowWidth = ImGui::GetContentRegionAvail().x;
+        float inputWidth = (0.2f * windowWidth);
         
         // Click to open/close create dropdown
         if (ImGui::Button("Create New Simulation")) {
@@ -208,8 +210,6 @@ void launchGui() {
             }
         }
         if (createNew) {
-            float inputWidth = (0.2f * windowWidth);
-
             // Get width
             ImGui::AlignTextToFramePadding();
             ImGui::Text("Width:");
@@ -307,6 +307,89 @@ void launchGui() {
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
+            }
+        }
+        
+        static bool batch = false;
+
+        if (ImGui::Button("Batch Simulations")) {
+            if (!batch) {
+                batch = true;
+            }
+            else {
+                batch = false;
+            }
+        }
+        if (batch) {
+            static int batchW = 3; // Default values
+            static int batchH = 2;
+            static int NumberOfSims = 1;
+            static int batchSelected = 0;
+
+            ImGui::SeparatorText("Batch Settings");
+
+            // Width and height Input
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Width:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(inputWidth);
+            ImGui::InputInt("##Width", &batchW);
+
+            ImGui::SameLine();
+            ImGui::Text("Height:");
+            ImGui::SameLine();
+            ImGui::InputInt("##Height", &batchH);
+            ImGui::PopItemWidth();
+
+            // Simulation Input
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("# of Simulations:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(inputWidth);
+            ImGui::InputInt("##NumberOfSims", &NumberOfSims);
+
+            ImGui::SeparatorText("Batch Save File");
+
+            // Dropdown menu for the save type
+            ImGui::PushItemWidth(0.3f * windowWidth);
+            if (ImGui::BeginCombo("##Save Type", saveTypes[batchSelected])) {
+                for (int i = 0; i < IM_ARRAYSIZE(saveTypes); i++) {
+                    bool is_selected = (batchSelected == i);
+                    if (ImGui::Selectable(saveTypes[i], is_selected)) {
+                        batchSelected = i;
+                    }
+
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("FileName:");
+            ImGui::SameLine();
+            ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
+            ImGui::PopItemWidth();
+
+            SaveType saveType = selected == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
+
+            // Estimated File Size
+            int cells = batchW * batchH;
+            size_t necessary = 24 + (8 * cells);
+            size_t complete = 24 + (80 * cells);
+
+            if (saveType == SaveType::NECESSARY) {
+                ImGui::Text("Size per frame: %zu Bytes", necessary);
+            }
+            else {
+                ImGui::Text("Size per frame: %zu Bytes", complete);
+            }
+
+            // Run Sims 
+            if (ImGui::Button("Run Batch Simulations")) {
+                std::string filename(filenameBuffer);
+                runSimulations(batchW, batchH, NumberOfSims, filename, saveType);
             }
         }
 
