@@ -22,6 +22,7 @@ public:
     std::vector<double> max_temp_history;
     std::vector<double> min_temp_history;
     std::vector<std::vector<double>> temperature_history;
+    double TempAvg;
 
     // State history of the grid, so we can rewind
     std::vector<Grid> grid_history;

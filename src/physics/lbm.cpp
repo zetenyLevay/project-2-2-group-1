@@ -1,27 +1,39 @@
 #include "main.h"
-using namespace std;
 
 int getIndex(int x, int y) {
     int wrappedX = (x + WIDTH) % WIDTH;
     int wrappedY = (y + HEIGHT) % HEIGHT;
     return wrappedY * WIDTH + wrappedX;
 }
-void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity){
+void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity,double TempAvg){
      for (int y = 0; y < HEIGHT; y++){
         for(int x = 0; x < WIDTH; x++){
             int idx= getIndex(x,y);
 
             // Calculating density of every f inside a cell
-            array<double, 3> result = getDensityAndVelocity(grid, idx);
+            std::array<double, 3> result = getDensityAndVelocity(grid, idx);
             double density = result[0];
             double ux = result[1];
             double uy = result[2];
+            double temp = 0.0;
+            for (int d = 0; d < 9; ++d) {
+                temp += grid.g[d][idx]; // sum all directions to get macroscopic temperature
+            }
             
-            
+            double buoyancy = density * 0.01 *(temp-TempAvg)*-1e-5;  //-1e-5 represents the donward gravity
+            //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
+            double uyF=0.0; //half force term of uy
+            // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
+            if(density!=0){
+                uyF=uy+  0.5 * buoyancy / density;
+            }
+
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
-                double cu=cx[d]*ux + cy[d]*uy;
-                newGrid.f[d][idx] = grid.f[d][idx] - (1.0/viscosity) * (grid.f[d][idx] - weights[d] * density*(1 + cu/cs2 + (cu*cu)/(2*cs2*cs2) -(ux*ux + uy*uy)/(2*cs2)));
+                double cu = cx[d]*ux + cy[d]*uyF;
+                //Guo Forcing term
+                double forceTerm=weights[d] *(1.0- 0.5/viscosity)*((cy[d] * buoyancy- uyF * buoyancy)/cs2 + (cu*(cy[d] * buoyancy))/(cs2 *cs2));
+                newGrid.f[d][idx] = grid.f[d][idx] - (1.0/viscosity) * (grid.f[d][idx] - weights[d] * density*(1 + cu/cs2 + (cu*cu)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
             }
         }
     }
@@ -37,15 +49,15 @@ void ThermalCollision(const Grid& grid, Grid& newGrid, double heat_spread){
                 temp += grid.g[d][idx];
             }
             //getting the density and the velocity from the Fluid Lattice Boltzmann calculations
-            array<double, 3> result = getDensityAndVelocity(grid, idx);
+            std::array<double, 3> result = getDensityAndVelocity(grid, idx);
             double density = result[0];
             double ux = result[1];
             double uy = result[2];
-
+           
             // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cu=cx[d]*ux + cy[d]*uy;
-                newGrid.g[d][idx] = grid.g[d][idx] - (1.0/heat_spread) * (grid.g[d][idx] - weights[d] *density * temp * (1+ cu/cs2));
+                newGrid.g[d][idx] = grid.g[d][idx] - (1.0/heat_spread) * (grid.g[d][idx] - weights[d] * temp * (1+ cu/cs2));
             }
         }
     }
@@ -68,7 +80,8 @@ void stream(const Grid& gridOld, Grid& gridNew) {
         }
     }
 }
-array<double, 3> getDensityAndVelocity(const Grid& grid,int idx){
+
+std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx){
     double density = 0.0;
         double ux=0.0;
         double uy=0.0;
@@ -77,12 +90,9 @@ array<double, 3> getDensityAndVelocity(const Grid& grid,int idx){
             ux=ux + (grid.f[d][idx]*cx[d]);
             uy=uy + (grid.f[d][idx]*cy[d]);
         }
-        if (density>0){
+        if (density!=0){
             ux/=density;
             uy/=density;
-        }else{
-            ux=0.0;
-            uy=0.0;
         }
     return {density, ux, uy};
 }

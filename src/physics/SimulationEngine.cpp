@@ -1,11 +1,12 @@
 #include "SimulationEngine.h"
 #include <numeric>
+#include <iostream>
 
 SimulationEngine::SimulationEngine() {
     current_step = 0;
     is_playing = false;
-    heat_spread = 1.0;
-    viscosity = 0.3;
+    heat_spread = 0.8;
+    viscosity = 0.8;
     temperatures.resize(CELLS, 20.0); // room temp assumption
     temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
 
@@ -17,7 +18,6 @@ SimulationEngine::SimulationEngine() {
             grid.f[d][i] = weights[d] * 1.0;
         }
     }
-
     time_history.push_back(current_step);
     max_temp_history.push_back(MAX_TEMP);
     min_temp_history.push_back(ROOM_TEMP);
@@ -26,7 +26,16 @@ SimulationEngine::SimulationEngine() {
 }
 
 void SimulationEngine::stepFoward() {
-    FluidCollision(grid,gridTemp,viscosity);
+    TempAvg=0.0;
+    for (int i = 0; i < CELLS; i++) {
+        for (int d = 0; d < 9; ++d) {
+            gridTemp.f[d][i] = 0.0;
+            gridTemp.g[d][i] = 0.0;
+        }
+        TempAvg+=temperatures[i];
+    }
+    TempAvg/=CELLS;
+    FluidCollision(grid,gridTemp,viscosity,TempAvg);
     ThermalCollision(grid, gridTemp, heat_spread);
     stream(gridTemp, grid);
 
@@ -38,6 +47,9 @@ void SimulationEngine::stepFoward() {
 
         for (int d = 0; d < 9; ++d) {
             temp += grid.g[d][i];
+            if (std::isnan(temp)) {
+                std::cout << "NaN TEMP at cell " << i << std::endl;
+            }
         }
         temperatures[i] = temp;
 
