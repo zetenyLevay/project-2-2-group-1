@@ -147,7 +147,7 @@ double LocalEngine::getTotalEnergy() const {
 
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
-void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid) {
+void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid){
     for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
             int idx= getIndex(x,y);
@@ -158,9 +158,22 @@ void LocalEngine::Collision(double heat_spread, Grid& gridTemp, const Grid grid)
                 temp += grid.g[d][idx];
             }
 
+            // to prevent floating point precision problems
+            // moving temp is all the temprature going in a direction and not itself
+            double movingTemp = 0.0;
+            double newTemps[9];
+
+            for (int d = 1; d < 9; ++d) {
+                newTemps[d] = weights[d] * temp;
+                movingTemp += newTemps[d];
+            }
+
+            // whatever gets lost by fp precision is added back to the cell
+            newTemps[0] = temp - movingTemp;
+
             // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
-                gridTemp.g[d][idx] = grid.g[d][idx] - (1.0/heat_spread) * (grid.g[d][idx] - weights[d] * temp);
+                gridTemp.g[d][idx] = grid.g[d][idx] - (1.0/heat_spread) * (grid.g[d][idx] - newTemps[d]);
             }
         }
     }
