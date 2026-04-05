@@ -29,7 +29,7 @@ To compile and run this project, you will need the following installed on your s
 
 **C++ Compiler**: Must support C++14 (e.g., GCC, Clang, or MSVC).
 
-**CMake**: Version **4.3**.
+**CMake**: Version **3.5 - 4.3**.
 
 ## Compilation Instructions
 This project uses CMake for an out-of-source build, keeping compiled binaries separate from the source code.

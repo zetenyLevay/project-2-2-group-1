@@ -1,16 +1,43 @@
 #include "ui.h"
-#include "SimulationEngine.h"
+#include "../data/local/LocalEngine.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "implot.h"
+#include "portable-file-dialogs.h"
 #include <GLFW/glfw3.h> 
 #include <iostream>
 #include <thread>
 #include <numeric>
+#include <filesystem>
+#include <functional>
 
-void startGui(SimulationEngine& engine) {
+DataSource currentSource;
+std::unique_ptr<SimulationEngine> engine;
+std::unique_ptr<SimulationEngine> createEngine(int w = 3, int h = 2) {
+
+    switch (currentSource) {
+        case DataSource::LOCAL:
+            return std::make_unique<LocalEngine>(w, h);
+        default:
+            std::cerr << "Unknown data source" << std::endl;
+            return nullptr;
+    }
+
+}
+
+void startGui(DataSource source) {
+    currentSource = source;
+
+    engine = createEngine(3, 2);
+
+    launchGui();
+}
+
+bool is_playing = false;
+
+void launchGui() {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
 
@@ -39,17 +66,26 @@ void startGui(SimulationEngine& engine) {
     double physics_tick_rate = 0.5; // Run 1 physics step every 0.5 seconds
 
     // The main loop
-    while(!glfwWindowShouldClose(window)) {
+    while(!glfwWindowShouldClose(window)) { 
         glfwPollEvents();
 
-        double current_time = glfwGetTime();        
+        double current_time = glfwGetTime();
+        
+        SimulationState state = *engine->getState();
+        
+        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
+            // Check whether you are at the end of the computed frames and it is a necessary save
+            if (state.current_step >= state.temperature_history.size() - 1 && state.grid_history.empty()) {
+                is_playing = false;
+            }
+            else {
+                engine->stepFoward();
+            }
 
-        if (engine.is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {            \
-            engine.stepFoward();
-            
             // Reset the timer for the next tick
             last_physics_tick = current_time;
         }
+        
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -85,7 +121,7 @@ void startGui(SimulationEngine& engine) {
             ImGuiID dock_main_id = dockspace_id;
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.10f, nullptr, &dock_main_id);
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Right, 0.20f, nullptr, &dock_main_id);
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.80f, nullptr, &dock_id_right);
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.70f, nullptr, &dock_id_right);
 
             // Assign windows to those zones based on their title
             ImGui::DockBuilderDockWindow("Simulation", dock_main_id);
@@ -110,7 +146,7 @@ void startGui(SimulationEngine& engine) {
             ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
             
             // Force the plot to match the exact dimensions of the grid
-            ImPlot::SetupAxesLimits(0, WIDTH, HEIGHT, 0, ImGuiCond_Always);
+            ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
 
             // Change the colors 
             // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
@@ -119,11 +155,11 @@ void startGui(SimulationEngine& engine) {
 
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
-                                engine.temperatures.data(), 
-                                HEIGHT, WIDTH,
+                                state.temperatures.data(), 
+                                state.height, state.width,
                                 20.0, 100.0,
                                 nullptr,       // Custom label format (nullptr hides it)
-                                ImPlotPoint(0, HEIGHT), ImPlotPoint(WIDTH, 0));
+                                ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
             ImPlot::PopColormap();
 
@@ -133,47 +169,158 @@ void startGui(SimulationEngine& engine) {
 
         // --- Simulation controls ---
         ImGui::Begin("Simulation Controls");
-        if (engine.is_playing) {
+
+        ImGui::SeparatorText("Control Simulation");
+
+        if (is_playing) {
             if (ImGui::Button("Pause Simulation")) {
-                engine.is_playing = false;
+                is_playing = false;
             }
         }      
         else {
             if (ImGui::Button("Play Simulation")) {
-                engine.is_playing = true;
+                is_playing = true;
             }
         }
         
         if (ImGui::Button("Step Forward (One Frame)")) {
-            engine.stepFoward();
+            engine->stepFoward();
         }
 
         if (ImGui::Button("Step Back (One Frame)")) {
-            engine.stepBack();
+            engine->stepBack();
         }
         
+        ImGui::SeparatorText("Change Simulation");
+
+        static bool createNew = false;
+        static int w = 3; // Default values
+        static int h = 2;
+        float windowWidth = ImGui::GetContentRegionAvail().x;
+        
+        // Click to open/close create dropdown
+        if (ImGui::Button("Create New Simulation")) {
+            if (!createNew) {
+                createNew = true;
+            }
+            else {
+                createNew = false;
+            }
+        }
+        if (createNew) {
+            float inputWidth = (0.2f * windowWidth);
+
+            // Get width
+            ImGui::Text("Width:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(inputWidth);
+            ImGui::InputInt("##Width", &w);
+
+            // Get height
+            ImGui::SameLine();
+            ImGui::Text("Height:");
+            ImGui::SameLine();
+            ImGui::InputInt("##Height", &h);
+
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm")) {
+                // Kill the compute thread.
+                engine->thread->terminate();
+
+                // Create and display the new sim
+                engine = std::move(createEngine(w, h));
+
+                createNew = false;
+            }
+        }
+
+        static bool save = false;
+        static char filenameBuffer[256] = "sim_01";
+        std::string folder = "../saves/";
+        std::string path = folder + std::string(filenameBuffer) + ".dat";
+        static const char* saveTypes[] = {"Necessary", "Complete"};
+        static int selected = 0;
+
+        // Click to open/close save dropdown
+        if (ImGui::Button("Save Simulation")) {
+            if (!save) {
+                save = true;
+            }
+            else {
+                save = false;
+            }
+        }
+        if (save) {
+            ImGui::PushItemWidth(0.3f * windowWidth);
+
+            // Dropdown menu for the save type
+            if (ImGui::BeginCombo("##Save Type", saveTypes[selected])) {
+                for (int i = 0; i < IM_ARRAYSIZE(saveTypes); i++) {
+                    bool is_selected = (selected == i);
+                    if (ImGui::Selectable(saveTypes[i], is_selected)) {
+                        selected = i;
+                    }
+
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            
+            ImGui::Text("FileName:");
+            ImGui::SameLine();
+            ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
+
+            ImGui::PopItemWidth();
+
+            SaveType saveType = selected == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
+
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm")) {
+                if (saveSimulation(state, path, saveType)) {
+                    std::cout << "Saved to: " << path << std::endl;
+                }
+                else {
+                    std::cerr << "Failed to save to: " << path << std::endl;
+                }
+
+                save = false;
+            }
+        }
+
+        if (ImGui::Button("Load Simulation")) {
+            auto f = pfd::open_file("Choose a save", "", {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            
+            if (!f.result().empty()) {
+                std::string selectedPath = f.result()[0];
+
+                switch (currentSource) {
+                    case DataSource::LOCAL:
+                        engine->thread->terminate();
+                        auto loadedEngine = loadLocalSimulation(selectedPath);
+                        if (loadedEngine) {
+                            engine = std::move(loadedEngine);
+                            std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
+                        }
+                }
+            }
+        }
+
         ImGui::End();
 
         // --- Stats window ---
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        /*
-        ImGui::Text("Average Temperature: 10.2°C -- 283.4K");
-        ImGui::Text("Coldest Temperature: 8.3°C -- 281.5K");
-        ImGui::Text("Warmest Temperature: 22.8°C -- 296.0K");
-        */
-
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", engine.temperatures[getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", engine.temperatures[getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", engine.temperatures[getIndex(2,1)]);
+        ImGui::Text("Hot Spot (0,0): %.2f C", state.temperatures[engine->getIndex(0,0)]);
+        ImGui::Text("Middle (1,0): %.2f C", state.temperatures[engine->getIndex(1,0)]);
+        ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[engine->getIndex(2,1)]);
 
         // Graph for temperature
-        // Example data
-        static float x_time[] = { 0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
-        static float y_temp[] = { 0.0f, 2.0f, 4.0f, 6.0f, 8.0f, 10.2f };
-
         // Get available width and height
         float width = ImGui::GetContentRegionAvail().x;
         float height = ImGui::GetContentRegionAvail().y;
@@ -185,15 +332,38 @@ void startGui(SimulationEngine& engine) {
             ImPlot::SetupAxes("Time Step", "Temperature (°C)");
             
             // Make the X-Axis automatically scroll forward as time goes on
-            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (engine.current_step > 5 ? engine.current_step + 1 : 5), ImGuiCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, (state.current_step > 5 ? state.current_step + 1 : 5), ImGuiCond_Always);
             
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", engine.time_history.data(), engine.max_temp_history.data(), engine.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", engine.time_history.data(), engine.min_temp_history.data(), engine.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
+
+            // Time step marker
+            if (!state.time_history.empty() && state.current_step < state.time_history.size()) {
+                // Get the current time, max and min
+                double cur_time = state.time_history[state.current_step];
+                double cur_max = state.max_temp_history[state.current_step];
+                double cur_min = state.min_temp_history[state.current_step];
+
+                ImPlotSpec specLine;
+                specLine.LineColor = ImVec4(0.7f, 0.7f, 0.7f, 0.6f); // Grey
+                specLine.LineWeight = 1.5f;
+                ImPlot::PlotInfLines("##CurrentTime", &cur_time, 1, specLine);
+
+                double x_dots[2] = {cur_time, cur_time};
+                double y_dots[2] = {cur_max, cur_min};
+
+                ImPlotSpec specDots;
+                specDots.Marker = ImPlotMarker_Circle; // Make it a circle
+                specDots.MarkerSize = 4.0f;
+                specDots.MarkerFillColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
+                specDots.MarkerLineColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f); // White
+                ImPlot::PlotScatter("##CurrentTimeDots", x_dots, y_dots, 2, specDots);
+            }
 
             ImPlot::EndPlot();
         }
@@ -210,12 +380,12 @@ void startGui(SimulationEngine& engine) {
         ImGui::Text("CUDA GPU: None (CPU Prototype Mode)");
 
         // 2. LBM Grid Stats
-        ImGui::Text("Grid Size: %d x %d", WIDTH, HEIGHT);
-        ImGui::Text("Memory Nodes: %d cells", CELLS);
+        ImGui::Text("Grid Size: %d x %d", engine->width, engine->height);
+        ImGui::Text("Memory Nodes: %d cells", engine->cells);
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
-        double total_energy = std::accumulate(engine.temperatures.begin(), engine.temperatures.end(), 0.0);
+        double total_energy = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Energy: %.2f J", total_energy);
 
         ImGui::End();
@@ -223,15 +393,20 @@ void startGui(SimulationEngine& engine) {
         // --- Timeline ---
         ImGui::Begin("Timeline");
 
-        static float currentTime = 0.0f;
-        float totalTime = 10.0f;
+        /// Get current limits of the simulation
+        int currentStep = state.current_step;
+        int maxStep = state.temperature_history.empty() ? 0 : state.temperature_history.size() - 1;
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 
         ImGui::SetNextItemWidth(-1.0f);
         // Hide the label by using "##"
-        if (ImGui::SliderFloat("##timeline", &currentTime, 0.0f, totalTime, "%.2f")) {
-            std::cout << "Scrolling timeline...\n";
+        if (ImGui::SliderInt("##timeline", &currentStep, 0, maxStep, "Frame %d")) {
+            // Pause sim
+            is_playing = false;
+
+            // Tell the engine to update the simulation
+            engine->seekTo(currentStep);
         }
 
         ImGui::End();
