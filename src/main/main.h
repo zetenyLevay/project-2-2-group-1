@@ -9,11 +9,11 @@
 #include <array>
 
 // 1. Shared Constants
-const int WIDTH = 1000;
-const int HEIGHT = 1000;
+const int WIDTH = 3;
+const int HEIGHT = 2;
 const int CELLS = WIDTH * HEIGHT;
 // Physics constants
-const double MAX_TEMP = 1000.0;
+const double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
 
 // Directions
