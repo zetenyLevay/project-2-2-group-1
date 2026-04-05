@@ -122,6 +122,22 @@ void LocalEngine::stepBack() {
     });
 }
 
+// Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
+void LocalEngine::seekTo(int step) {
+    thread->submitTask([this, step](SimulationState& state) {
+        // Prevent going out of bounds
+        if (step < 0 || step >= state.temperature_history.size()) return;
+
+        state.current_step = step;
+        state.temperatures = state.temperature_history[state.current_step];
+
+         // Only pull from grid_history if it exists (Necessary loads dont have grid history)
+        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
+            state.grid = state.grid_history[state.current_step];
+        }
+    });
+}
+
 double LocalEngine::getTotalEnergy() const {
     // Can't really make this run on a seperate thread without changing the function signature.
     auto state = thread->getState();

@@ -12,6 +12,8 @@ public:
 
     void stepBack();
 
+    void seekTo(int step);
+
     double getTotalEnergy() const;
 
     // Physics functions

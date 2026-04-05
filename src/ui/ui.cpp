@@ -392,15 +392,20 @@ void launchGui() {
         // --- Timeline ---
         ImGui::Begin("Timeline");
 
-        static float currentTime = 0.0f;
-        float totalTime = 10.0f;
+        /// Get current limits of the simulation
+        int currentStep = state.current_step;
+        int maxStep = state.temperature_history.empty() ? 0 : state.temperature_history.size() - 1;
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 
         ImGui::SetNextItemWidth(-1.0f);
         // Hide the label by using "##"
-        if (ImGui::SliderFloat("##timeline", &currentTime, 0.0f, totalTime, "%.2f")) {
-            std::cout << "Scrolling timeline...\n";
+        if (ImGui::SliderInt("##timeline", &currentStep, 0, maxStep, "Frame %d")) {
+            // Pause sim
+            is_playing = false;
+
+            // Tell the engine to update the simulation
+            engine->seekTo(currentStep);
         }
 
         ImGui::End();

@@ -50,6 +50,8 @@ public:
     virtual void stepFoward() = 0;
 
     virtual void stepBack() = 0;
+
+    virtual void seekTo(int step) = 0;
 };
 
 enum DataSource {
