@@ -7,6 +7,7 @@
 #include <queue>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 
 class ReusableThread;
 
