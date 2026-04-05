@@ -36,14 +36,19 @@ void stream(const Grid& gridOld, Grid& gridNew) {
             for (int d = 0; d < 9; ++d) {
 
 
-                int nextX = x + cx[d];
-                int nextY = y + cy[d];
+                int sourceX = x - cx[d];
+                int sourceY = y - cy[d];
 
                 // check if the next x and y are in bound
-                if (nextX >= 0 && nextY >= 0 && nextX < WIDTH && nextY < HEIGHT) {
+                if (sourceX >= 0 && sourceY >= 0 && sourceX < WIDTH && sourceY < HEIGHT) {
 
-                    int nindex = getIndex(x + cx[d], y + cy[d]);
-                    gridNew.g[d][nindex] = gridOld.g[d][currentIndex];
+                    int sourceIndex = getIndex(sourceX, sourceY);
+                    gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
+                }
+                // if not in bound take the opposite direction (hits wall on the west, goes east instead)
+                else {
+                    int oppositeDir = inv[d];
+                    gridNew.g[d][currentIndex] = gridOld.g[oppositeDir][currentIndex];
                 }
             }
         }

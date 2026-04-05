@@ -9,16 +9,17 @@
 #include <array>
 
 // 1. Shared Constants
-const int WIDTH = 3;
-const int HEIGHT = 2;
+const int WIDTH = 1000;
+const int HEIGHT = 1000;
 const int CELLS = WIDTH * HEIGHT;
 // Physics constants
-const double MAX_TEMP = 100.0;
+const double MAX_TEMP = 1000.0;
 const double ROOM_TEMP = 20.0;
 
 // Directions
-const int cx[9] = {0,1,0,-1,0,1,-1,1,-1};
-const int cy[9] = {0,0,1,0,-1,1,-1,-1,1};
+const int cx[9] = {0,1,0,-1,0,1,-1,-1,-1};
+const int cy[9] = {0,0,1,0,-1,1,1,-1,1};
+const int inv[9] = {0,3,4,1,2,7,8,5,6}; // exact inverse direction in case a wall is hit
 
 // Weights of directions
 const double w0 = 4.0/9.0; // rest direction (itself)
