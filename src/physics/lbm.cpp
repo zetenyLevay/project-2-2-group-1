@@ -1,9 +1,7 @@
 #include "main.h"
 
 int getIndex(int x, int y) {
-    int wrappedX = (x + WIDTH) % WIDTH;
-    int wrappedY = (y + HEIGHT) % HEIGHT;
-    return wrappedY * WIDTH + wrappedX;
+    return y * WIDTH + x;
 }
 
 void Collision(const Grid& grid, Grid& newGrid, double heat_spread){
@@ -36,8 +34,17 @@ void stream(const Grid& gridOld, Grid& gridNew) {
             // from the old grid current index
             // to the new grid neighbor index
             for (int d = 0; d < 9; ++d) {
-                int nindex = getIndex(x + cx[d], y + cy[d]);
-                gridNew.g[d][nindex] = gridOld.g[d][currentIndex];
+
+
+                int nextX = x + cx[d];
+                int nextY = y + cy[d];
+
+                // check if the next x and y are in bound
+                if (nextX >= 0 && nextY >= 0 && nextX < WIDTH && nextY < HEIGHT) {
+
+                    int nindex = getIndex(x + cx[d], y + cy[d]);
+                    gridNew.g[d][nindex] = gridOld.g[d][currentIndex];
+                }
             }
         }
     }

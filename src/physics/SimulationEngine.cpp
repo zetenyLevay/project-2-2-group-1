@@ -27,7 +27,7 @@ void SimulationEngine::stepFoward() {
     stream(gridTemp, grid);
 
     double current_max = ROOM_TEMP;
-    double current_min = MAX_TEMP; // Assuming max 100 is possible
+    double current_min = MAX_TEMP;
 
     for (int i = 0; i < CELLS; i++) {
         double temp = 0.0;
