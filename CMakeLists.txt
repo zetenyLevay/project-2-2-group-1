@@ -75,6 +75,9 @@ add_library(simulation_logic
     src/data/SimulationEngine.cpp
     src/data/SimulationEngine.h
 
+    src/data/BatchRunner.cpp
+    src/data/BatchRunner.h
+
     src/data/local/LocalEngine.cpp
     src/data/local/LocalEngine.h
 
@@ -88,6 +91,10 @@ add_executable(project_2_2_group_1
     src/main/main.cpp
     src/ui/ui.cpp
     src/ui/ui.h
+    src/ui/selectMenu.cpp
+    src/ui/selectMenu.h
+    src/ui/runSims.cpp
+    src/ui/runSims.h
     ${IMGUI_SOURCES}
     ${IMPLOT_SOURCES}
 )

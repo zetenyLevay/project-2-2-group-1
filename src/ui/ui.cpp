@@ -211,6 +211,7 @@ void launchGui() {
             float inputWidth = (0.2f * windowWidth);
 
             // Get width
+            ImGui::AlignTextToFramePadding();
             ImGui::Text("Width:");
             ImGui::SameLine();
             ImGui::PushItemWidth(inputWidth);
@@ -269,7 +270,7 @@ void launchGui() {
                 }
                 ImGui::EndCombo();
             }
-            
+            ImGui::AlignTextToFramePadding();
             ImGui::Text("FileName:");
             ImGui::SameLine();
             ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
@@ -434,4 +435,11 @@ void launchGui() {
 
         glfwSwapBuffers(window);
     }
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
 }
