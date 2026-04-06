@@ -10,16 +10,26 @@ Currently, this aims to be a robust CPU based prototype. To prepare for High-Per
 ## Repository Structure
 ```text
 project_2_2_group_1/
-├── CMakeLists.txt         # Build configuration
-├── README.md              # Project documentation
+├── CMakeLists.txt                  # Build configuration
+├── README.md                       # Project documentation
 ├── src/
 │   ├── main/
-│   │   ├── main.cpp       # Main simulation loop and execution
-│   │   ├── main.h         # Shared constants, structs, and declarations
-│   │   └── lbm.cpp        # Core LBM physics and streaming logic
-│   └── ui/
-│       ├── ui.cpp         # User interface logic
-│       └── ui.h           
+│   │   ├── main.cpp                # Main simulation loop and execution
+│   │   └── main.h                  # Shared constants, structs, and declarations
+│   ├── ui/
+│   │   ├── ui.cpp                  # User interface logic
+│   │   └── ui.h  
+│   ├── thread/   
+│   │   ├── ReusableThread.cpp      # Thread logic         
+│   │   └── ReusableThread.h     
+│   └── data/   
+│       ├── SimulationEngine.cpp    #         
+│       ├── SimulationEngine.h  
+│       ├── BatchRunner.cpp         # Runs full simulations 
+│       ├── BatchRunner.h    
+│       └── local/
+│           ├── LocalEngine.cpp     #
+│           └── LocalEngine.h    
 └── tests/
     └── test_stream.cpp    # Isolated unit tests for the streaming/boundary module
 ```
@@ -54,11 +64,17 @@ This project uses CMake for an out-of-source build, keeping compiled binaries se
 ## Running the Simulation
 Once compiled the main executable is in your build directory.
 
-To run the main simulation loop:
+To run the UI:
 
 Linux / macOS: ./project_2_2_group_1
 
 Windows: Debug\project_2_2_group_1.exe (or just project_2_2_group_1.exe depending on your compiler)
+
+To run the simulations: 
+``` bash
+./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
+```
+
 
 ## Testing
 We use CMake's default testing framework (CTest) to validate individual modules without running the full simulation loop.
