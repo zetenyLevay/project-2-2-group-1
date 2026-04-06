@@ -172,9 +172,12 @@ void LocalEngine::Collision(double heat_spread, Grid& gridNew, Grid &gridOld){
             newTemps[0] = temp - movingTemp;
 
             // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
-            for (int d = 0; d < 9; ++d) {
+            double newMovingTemp = 0.0;
+            for (int d = 1; d < 9; ++d) {
                 gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - newTemps[d]);
+                newMovingTemp += gridNew.g[d][idx];
             }
+            gridNew.g[0][idx] = temp - newMovingTemp;
         }
     }
 }
@@ -190,14 +193,11 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
             // from the old grid current index
             // to the new grid neighbor index
             for (int d = 0; d < 9; ++d) {
-
-
                 int sourceX = x - cx[d];
                 int sourceY = y - cy[d];
 
                 // check if the next x and y are in bound
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height) {
-
                     int sourceIndex = getIndex(sourceX, sourceY);
                     gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
                 }

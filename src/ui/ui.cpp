@@ -484,7 +484,6 @@ void launchGui() {
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 
         ImGui::SetNextItemWidth(-1.0f);
-        // Hide the label by using "##"
         if (ImGui::SliderInt("##timeline", &currentStep, 0, maxStep, "Frame %d")) {
             // Pause sim
             is_playing = false;
