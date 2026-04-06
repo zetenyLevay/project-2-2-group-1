@@ -12,13 +12,14 @@ const int WIDTH = 20;
 const int HEIGHT = 20;
 const int CELLS = WIDTH * HEIGHT;
 // Physics constants
-const double MAX_TEMP = 600.0;
+const double MAX_TEMP = 6000.0;
 const double ROOM_TEMP = 20.0;
 const double cs2= 1.0/3.0; //lattice constant speed of sound
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,1,-1};
 const int cy[9] = {0,0,1,0,-1,1,-1,-1,1};
+const int inv[9] = {0,3,4,1,2,7,8,5,6};
 
 // Weights of directions
 const double w0 = 4.0/9.0; // rest direction (itself)
@@ -41,9 +42,8 @@ struct Grid {
 
 // 3. Function Declarations
 int getIndex(int x, int y);
-void FluidCollision(const Grid& grid, Grid& newGrid, double viscosity, double TempAvg);
+void CollisionStep(const Grid& grid, Grid& newGrid, double viscosity,double TempAvg,double heat_spread);
 std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-void ThermalCollision(const Grid& grid, Grid& TempGrid, double heat_spread);
 void stream(const Grid& TempGrid, Grid& grid);
 
 #endif //PROJECT_2_2_GROUP_1_MAIN_H
