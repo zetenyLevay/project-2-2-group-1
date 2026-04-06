@@ -75,6 +75,9 @@ add_library(simulation_logic
     src/data/SimulationEngine.cpp
     src/data/SimulationEngine.h
 
+    src/data/BatchRunner.cpp
+    src/data/BatchRunner.h
+
     src/data/local/LocalEngine.cpp
     src/data/local/LocalEngine.h
 
