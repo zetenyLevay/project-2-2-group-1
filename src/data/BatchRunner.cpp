@@ -28,7 +28,7 @@ void runSimulations(int width, int height, int NumberOfSims, const std::string& 
                 double minTemp = state->min_temp_history.back();
 
                 // The effective equilibream, no need to check for until it is exactly equal
-                if (std::abs(maxTemp - minTemp) < 0.001) {
+                if (std::abs(maxTemp - minTemp) < 0.1) {
                     isComplete = true;
 
                     // Get the full path
