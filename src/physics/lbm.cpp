@@ -80,6 +80,8 @@ std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx){
     double density = 0.0;
         double ux=0.0;
         double uy=0.0;
+        //we get density by adding all of the moving particles
+        //the ux and uy represent the collection of the right moving particles and the left moving particles
         for (int d = 0; d < 9; ++d) {
             density +=grid.f[d][idx];
             ux=ux + (grid.f[d][idx]*cx[d]);
