@@ -389,7 +389,8 @@ void launchGui() {
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                runSimulations(batchW, batchH, NumberOfSims, filename, saveType);
+                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename, saveType);
+                batchThread.detach();
             }
         }
 

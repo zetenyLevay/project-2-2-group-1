@@ -1,10 +1,13 @@
 #include "main.h"
 #include "ui.h"
 #include "../data/local/LocalEngine.h"
+#include "../data/BatchRunner.h"
+#include <bits/stdc++.h>
 #include <iostream>
 #include <vector>
 #include <iomanip>
 #include <memory>
+#include <string>
 
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
@@ -37,18 +40,31 @@ void runWebSocketServer(LocalEngine& engine) {
 // relaxation time for temperature spread
 const double heat_spread = 1.0;
 
-// I removed printTemperatures() because I didn't want to put in the effort of porting it to use SimulationState
+int main(int argc, char* argv[]) {
+    if (argc >= 2 && std::string(argv[1]) == "--batch") {
+        // runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType)
+        // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>
 
-int main() {
-    // Mode Selector
-    bool run_gui_mode = true; // Set to false to run the WebSocket server!
-    if (run_gui_mode) {
+        if (argc < 7) {
+            std::cerr << "Too few arguements for batch simulation: \n project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
+            return 1;
+        }
+
+        int width = atoi(argv[2]);
+        int height = atoi(argv[3]);
+        int NumberOfSims = atoi(argv[4]);
+        std::string filename = argv[5];
+        int selectedSave = atoi(argv[6]);
+        
+        SaveType saveType = selectedSave == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
+
+        std::thread batchThread = runSimulations(width, height, NumberOfSims, filename, saveType);
+        batchThread.join(); // Keeps thread alive until it is finished
+    }
+    else {
+        // Making this default but later it should be opened with .\project_2_2_group_1.exe --ui
         std::cout << "Booting Desktop UI..." << std::endl;
         startGui(DataSource::LOCAL);
-    } else {
-        // TODO: Fix web socket call
-        //runWebSocketServer(engine);
     }
-
     return 0;
 }

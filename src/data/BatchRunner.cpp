@@ -3,8 +3,8 @@
 #include <cmath>
 #include <iostream>
 
-void runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType) {
-    std::thread([=]() {
+std::thread runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType) {
+    return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
             std::cout << "Starting Simulation " << i + 1 << " of " << NumberOfSims << std::endl;
 
@@ -50,5 +50,5 @@ void runSimulations(int width, int height, int NumberOfSims, const std::string& 
             }
         }
         std::cout << "All Simulations Complete" << std::endl;
-    }).detach();
+    });
 }
