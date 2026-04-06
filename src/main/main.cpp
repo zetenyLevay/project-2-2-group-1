@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
         // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>
 
         if (argc < 7) {
-            std::cerr << "Too few arguements for batch simulation: \n project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
+            std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
             return 1;
         }
 
