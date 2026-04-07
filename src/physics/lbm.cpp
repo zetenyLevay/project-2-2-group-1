@@ -22,7 +22,7 @@ void CollisionStep(const Grid& grid, Grid& newGrid, double viscosity,double Temp
             }
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = 2*1e-5 *(temp-TempAvg);  //2*1e-5 represents the thermal expansion strenght
+            double buoyancy = 4*1e-5 *(temp-TempAvg);  //2*1e-5 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
