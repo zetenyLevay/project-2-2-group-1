@@ -158,26 +158,12 @@ void LocalEngine::Collision(double heat_spread, Grid& gridNew, Grid &gridOld){
                 temp += gridOld.g[d][idx];
             }
 
-            // to prevent floating point precision problems
-            // moving temp is all the temprature going in a direction and not itself
-            double movingTemp = 0.0;
-            double newTemps[9];
-
-            for (int d = 1; d < 9; ++d) {
-                newTemps[d] = weights[d] * temp;
-                movingTemp += newTemps[d];
-            }
-
-            // whatever gets lost by fp precision is added back to the cell
-            newTemps[0] = temp - movingTemp;
-
             // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
-            double newMovingTemp = 0.0;
-            for (int d = 1; d < 9; ++d) {
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - newTemps[d]);
-                newMovingTemp += gridNew.g[d][idx];
+            for (int d = 0; d < 9; ++d) {
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - weights[d] * temp);
+
             }
-            gridNew.g[0][idx] = temp - newMovingTemp;
+
         }
     }
 }
