@@ -19,6 +19,8 @@ struct SimulationState {
     // State Checks
     int current_step;
     double heat_spread;
+    double viscosity;
+    double TempAvg;
 
     // Information for the stats
     std::vector<double> time_history;

@@ -16,7 +16,7 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 3, int h = 2) {
+std::unique_ptr<SimulationEngine> createEngine(int w = 50, int h = 50) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
@@ -31,7 +31,7 @@ std::unique_ptr<SimulationEngine> createEngine(int w = 3, int h = 2) {
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(3, 2);
+    engine = createEngine(50, 50);
 
     launchGui();
 }
@@ -64,7 +64,7 @@ void launchGui() {
     ImGui_ImplOpenGL3_Init("#version 330");
 
     double last_physics_tick = glfwGetTime();
-    double physics_tick_rate = 0.5; // Run 1 physics step every 0.5 seconds
+    double physics_tick_rate = 0.05; // Run 1 physics step every 0.5 seconds
 
     // The main loop
     while(!glfwWindowShouldClose(window)) { 

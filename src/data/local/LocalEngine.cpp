@@ -16,8 +16,9 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->grid = initialState->cells;
 
     initialState->current_step = 0;
-    initialState->heat_spread = 1.0;
-
+    initialState->heat_spread = 0.8;
+    initialState->viscosity = 0.6;
+    initialState->TempAvg=0.0;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
     initialState->temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
 
@@ -25,8 +26,11 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     for (int i = 0; i < cells; i++) {
         for (int d = 0; d < 9; ++d) {
             initialState->grid.g[d][i] = weights[d] * initialState->temperatures[i];
+            initialState->grid.f[d][i] = weights[d] *1.0; //initializing the flow of the fluid 
         }
+        initialState->TempAvg = initialState->TempAvg + initialState->temperatures[i];
     }
+    initialState->TempAvg = initialState->TempAvg/cells;
 
     initialState->time_history.push_back(initialState->current_step);
     initialState->max_temp_history.push_back(MAX_TEMP);
@@ -59,13 +63,13 @@ void LocalEngine::stepFoward() {
         }
 
         Grid gridTemp(state.cells);
-        this->Collision(state.heat_spread, gridTemp, state.grid);
+        this->Collision(state.heat_spread,state.TempAvg,state.viscosity, gridTemp, state.grid);
 
         this->Stream(gridTemp, state.grid);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
-
+        state.TempAvg=0.0;
         for (int i = 0; i < cells; i++) {
             double temp = 0.0;
 
@@ -73,11 +77,14 @@ void LocalEngine::stepFoward() {
                 temp += state.grid.g[d][i];
             }
             state.temperatures[i] = temp;
+            state.TempAvg = state.TempAvg + state.temperatures[i];
 
             // Find Max and Min for the graph
             if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
             if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
         }
+        state.TempAvg= state.TempAvg / cells;
+
 
         state.current_step++;
         state.time_history.push_back(state.current_step);
@@ -147,23 +154,45 @@ double LocalEngine::getTotalEnergy() const {
 
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
-void LocalEngine::Collision(double heat_spread, Grid& gridNew, Grid &gridOld){
-    for (int y = 0; y < height; y++){
+void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
+         for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
             int idx= getIndex(x,y);
 
-            // Calculating temperature of every g inside a cell
+            // Calculating density of every f inside a cell
+            std::array<double, 3> result = getDensityAndVelocity(gridOld, idx);
+            double density = result[0];
+            double ux = result[1]; //horizontal velocity
+            double uy = result[2]; //vertical velocity
             double temp = 0.0;
+            //calculating the temperature for every direction inside a cell
             for (int d = 0; d < 9; ++d) {
-                temp += gridOld.g[d][idx];
+                temp += gridOld.g[d][idx]; 
+            }
+            //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
+            //buoyancy represents how much the hot fluid wants to rise up
+            double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
+
+            //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
+            // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
+            //half force term of uy
+            double uyF=0.0; 
+            if(density!=0){
+                uyF=uy+  0.5 * buoyancy / density;
             }
 
-            // Calculating the equilibrium function for every g inside of a cell and applying the collision to a new grid
+            // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - weights[d] * temp);
-
+                double cuF = cx[d]*ux + cy[d]*uyF;
+                //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
+                double forceTerm=weights[d] *(1.0- 0.5/viscosity)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
+                //The complete Lattice Boltzmann Fluid movement formula
+                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/viscosity) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                //The complete Lattice boltzmann Thermal formula
+                double cuT=cx[d]*ux + cy[d]*uy;
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
+                
             }
-
         }
     }
 }
@@ -186,15 +215,34 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height) {
                     int sourceIndex = getIndex(sourceX, sourceY);
                     gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
+                    gridNew.f[d][currentIndex] = gridOld.f[d][sourceIndex];
                 }
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
                     int oppositeDir = inv[d];
                     gridNew.g[d][currentIndex] = gridOld.g[oppositeDir][currentIndex];
+                    gridNew.f[d][currentIndex] = gridOld.f[oppositeDir][currentIndex];
                 }
             }
         }
     }
+}
+std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int idx){
+    double density = 0.0;
+        double ux=0.0;
+        double uy=0.0;
+        //we get density by adding all of the moving particles
+        //the ux and uy represent the collection of the right moving particles and the left moving particles
+        for (int d = 0; d < 9; ++d) {
+            density +=gridOld.f[d][idx];
+            ux=ux + (gridOld.f[d][idx]*cx[d]);
+            uy=uy + (gridOld.f[d][idx]*cy[d]);
+        }
+        if (density!=0){
+            ux/=density;
+            uy/=density;
+        }
+    return {density, ux, uy};
 }
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {

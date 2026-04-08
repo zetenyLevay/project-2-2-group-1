@@ -10,8 +10,9 @@
 
 
 // Physics constants
-const double MAX_TEMP = 100.0;
+const double MAX_TEMP = 10000.0;
 const double ROOM_TEMP = 20.0;
+const double cs2= 1.0/3.0; //lattice constant speed of sound
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,-1,1};
@@ -26,10 +27,11 @@ const double weights[9] = {w0, w1_4,w1_4,w1_4,w1_4,w5_9,w5_9,w5_9,w5_9};
 
 // 2. Shared Data Structure (Structure of Arrays)
 struct Grid {
-    std::array<std::vector<double>, 9> g;
+    std::array<std::vector<double>, 9> g,f;
     Grid(int cells) {
         for (int i = 0; i < 9; ++i) {
             g[i].resize(cells, 0.0);
+            f[i].resize(cells,0.0);
         }
     }
 };
