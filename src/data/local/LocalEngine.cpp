@@ -112,20 +112,6 @@ void LocalEngine::stepBack() {
         if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
             state.grid = state.grid_history[state.current_step];
         }
-        
-        /* 
-        // Erase most recent state
-        // WARNING: I THINK THIS WILL CAUSE ISSUES WHEN ADD THE ABILITY TO LOAD IN SIMS
-        state.time_history.pop_back();
-        state.max_temp_history.pop_back();
-        state.min_temp_history.pop_back();
-        state.temperature_history.pop_back();
-        state.grid_history.pop_back();
-
-        // Restore previous state
-        state.temperatures = state.temperature_history.back();
-        state.grid = state.grid_history.back();
-        */
     });
 }
 
