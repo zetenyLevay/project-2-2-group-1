@@ -400,10 +400,14 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
+        double hotSpot = state.max_temp_history.back();
+        double coldSpot = state.min_temp_history.back();
+        double estMiddle = (hotSpot + coldSpot) / 2;
+
         // Live real data
-        ImGui::Text("Hot Spot (0,0): %.2f C", state.temperatures[engine->getIndex(0,0)]);
-        ImGui::Text("Middle (1,0): %.2f C", state.temperatures[engine->getIndex(1,0)]);
-        ImGui::Text("Bottom Right (2,1): %.2f C", state.temperatures[engine->getIndex(2,1)]);
+        ImGui::Text("Hot Spot: %.2f C", hotSpot);
+        ImGui::Text("Middle): %.2f C", estMiddle);
+        ImGui::Text("Bottom Right: %.2f C", coldSpot);
 
         // Graph for temperature
         // Get available width and height
