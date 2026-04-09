@@ -2,6 +2,9 @@
 #include <iostream>
 #include <memory>
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 Task TaskQueue::getNextTask() {
     std::unique_lock<std::mutex> lock(this->taskMutex);
 
@@ -19,6 +22,9 @@ Task TaskQueue::getNextTask() {
     return task;
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 void TaskQueue::submitTask(Task task) {
     this->taskMutex.lock();
 
@@ -28,11 +34,17 @@ void TaskQueue::submitTask(Task task) {
     this->taskMutex.unlock();
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 void TaskQueue::stop() {
     this->stopping = true;
     this->condition.notify_one();
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 void ReusableThread::terminate() {
     if (this->terminateNext == true) return;
 
@@ -46,15 +58,24 @@ void ReusableThread::terminate() {
     this->thread.join();
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 ReusableThread::ReusableThread(SimulationStatePointer initialState) {
     this->currentStatePtr = initialState;
     thread = std::thread(&ReusableThread::threadMain, this);
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 void ReusableThread::submitTask(Task task) {
     this->taskQueue.submitTask(task);
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 SimulationStatePointer ReusableThread::getState() {
     SimulationStatePointer statePtr;
     this->stateMutex.lock();
@@ -63,12 +84,18 @@ SimulationStatePointer ReusableThread::getState() {
     return statePtr;
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
     std::shared_ptr<SimulationState> statePtr = std::const_pointer_cast<SimulationState>(this->currentStatePtr);
 
     return statePtr;
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 void ReusableThread::threadMain() {
     beginning:
 
@@ -89,6 +116,9 @@ void ReusableThread::threadMain() {
     goto beginning;
 }
 
+// Main Writer: Berke
+// Reviewer: 
+// Contributers:
 ReusableThread::~ReusableThread() {
     this->terminate();
 }

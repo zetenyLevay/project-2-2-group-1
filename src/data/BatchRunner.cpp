@@ -3,6 +3,9 @@
 #include <cmath>
 #include <iostream>
 
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers:
 std::thread runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {

@@ -10,6 +10,9 @@ std::shared_ptr<SimulationState> SimulationEngine::getMutableState() {
     return this->thread->getMutableState();
 }
 
+// Main Writer: Gecenio
+// Reviewer: 
+// Contributers: Berke 
 const int SimulationEngine::getIndex(int x, int y) {
     int wrappedX = (x + this->width) % this->width;
     int wrappedY = (y + this->height) % this->height;

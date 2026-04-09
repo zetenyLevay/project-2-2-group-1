@@ -14,6 +14,9 @@
 
 typedef websocketpp::server<websocketpp::config::asio> server;
 
+// Main Writer: Gecenio
+// Reviewer: 
+// Contributers: 
 void runWebSocketServer(LocalEngine& engine) {
     server ws_server;
     ws_server.clear_access_channels(websocketpp::log::alevel::all);
@@ -40,6 +43,9 @@ void runWebSocketServer(LocalEngine& engine) {
 // relaxation time for temperature spread
 const double heat_spread = 1.0;
 
+// Main Writer: Gecenio
+// Reviewer: 
+// Contributers: Kristian
 int main(int argc, char* argv[]) {
     if (argc >= 2 && std::string(argv[1]) == "--batch") {
         // runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType)

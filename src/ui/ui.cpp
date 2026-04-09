@@ -38,6 +38,9 @@ void startGui(DataSource source) {
 
 bool is_playing = false;
 
+// Main Writer: Kristian/Gecenio/Berke
+// Reviewer: 
+// Contributers: 
 void launchGui() {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.

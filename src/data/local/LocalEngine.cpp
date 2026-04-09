@@ -5,6 +5,9 @@
 #include <filesystem>
 
 // Initialized on main thread
+// Main Writer: Berke/Kristian 
+// Reviewer: 
+// Contributers: 
 LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height) {
     auto initialState = std::make_shared<SimulationState>();
 
@@ -42,6 +45,9 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     this->thread = std::make_unique<ReusableThread>(initialState);
 }
 
+// Main Writer: Gecenio 
+// Reviewer: 
+// Contributers: Kristian, Berke
 // Mutates: grid, temperatures, current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history
 void LocalEngine::stepFoward() {
     thread->submitTask([this](SimulationState& state) {
@@ -97,6 +103,9 @@ void LocalEngine::stepFoward() {
     });
 }
 
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers:
 // Mutates: current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history, temperatures, grid
 void LocalEngine::stepBack() {
     thread->submitTask([this](SimulationState& state) {
@@ -140,6 +149,9 @@ double LocalEngine::getTotalEnergy() const {
 
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
+// Main Writer: Cosmin
+// Reviewer: 
+// Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
          for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
@@ -183,6 +195,9 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
     }
 }
 
+// Main Writer: Gecenio
+// Reviewer: 
+// Contributers: Cosmin, Zeteny
 void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
     for(int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
@@ -213,6 +228,10 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
         }
     }
 }
+
+// Main Writer: Cosmin
+// Reviewer: 
+// Contributers: 
 std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int idx){
     double density = 0.0;
         double ux=0.0;
@@ -231,6 +250,9 @@ std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int
     return {density, ux, uy};
 }
 
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers: 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     std::ifstream in(filepath, std::ios::binary);
     if (!in.is_open()) {
@@ -301,6 +323,9 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     return loadedEngine;
 }
 
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers: 
 bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType) {
     std::filesystem::path pathObj(filepath);
     std::filesystem::path dir = pathObj.parent_path();
