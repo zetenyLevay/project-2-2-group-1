@@ -10,6 +10,9 @@
 #include <GLFW/glfw3.h>
 #include <memory>
 #include <vector>
+#include "main.h"
+
+inline double scaleMax = MAX_TEMP*1.1;
 
 void launchGui();
 

@@ -13,6 +13,7 @@
 #include <numeric>
 #include <filesystem>
 #include <functional>
+#include "main.h"
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
@@ -40,7 +41,7 @@ bool is_playing = false;
 
 // Main Writer: Kristian/Gecenio/Berke
 // Reviewer: 
-// Contributers: 
+// Contributers: Zétény
 void launchGui() {
     // First, we need to initialize GLFW which is our window manager.
     // We'll use GLFW to render a window, and imGui to draw to it.
@@ -235,6 +236,7 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h));
+                scaleMax = MAX_TEMP*1.1;
 
                 createNew = false;
             }
@@ -412,6 +414,14 @@ void launchGui() {
         ImGui::Text("Middle): %.2f C", estMiddle);
         ImGui::Text("Bottom Right: %.2f C", coldSpot);
 
+
+        if (ImGui::Button("Zoom To Convergence")) {
+            scaleMax = hotSpot * 1.5;
+        }
+        if (ImGui::Button("Reset Scale")) {
+            scaleMax = MAX_TEMP * 1.1;
+        }
+
         // Graph for temperature
         // Get available width and height
         float width = ImGui::GetContentRegionAvail().x;
@@ -421,18 +431,22 @@ void launchGui() {
         if (ImPlot::BeginPlot("Temperature Convergence", ImVec2(-1.0f, height * 0.5f))) {            
             
             // Setup Axis Labels
-            ImPlot::SetupAxes("Time Step", "Temperature (°C)");
+            ImPlot::SetupAxes("Time Step", "Temperature Hot(°C)");
             
             // Make the X-Axis automatically scroll forward as time goes on
             ImPlot::SetupAxisLimits(ImAxis_X1, 0, (state.current_step > 5 ? state.current_step + 1 : 5), ImGuiCond_Always);
             
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
-            ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, 105.0, ImGuiCond_Once);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, scaleMax, ImGuiCond_Always);
+
+            double ratio = state.max_temp_history[state.current_step] / state.min_temp_history[state.current_step];
+
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
             ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
             ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
+
 
             // Time step marker
             if (!state.time_history.empty() && state.current_step < state.time_history.size()) {
