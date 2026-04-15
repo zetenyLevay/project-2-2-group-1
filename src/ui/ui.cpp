@@ -411,8 +411,8 @@ void launchGui() {
 
         // Live real data
         ImGui::Text("Hot Spot: %.2f C", hotSpot);
-        ImGui::Text("Middle): %.2f C", estMiddle);
-        ImGui::Text("Bottom Right: %.2f C", coldSpot);
+        ImGui::Text("Average Temperature: %.2f C", estMiddle);
+        ImGui::Text("Cold Spot: %.2f C", coldSpot);
 
 
         if (ImGui::Button("Zoom To Convergence")) {
