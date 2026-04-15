@@ -491,8 +491,8 @@ void launchGui() {
 
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
-        double total_energy = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
-        ImGui::Text("Total System Energy: %.2f J", total_energy);
+        double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
+        ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
 
         ImGui::End();
 

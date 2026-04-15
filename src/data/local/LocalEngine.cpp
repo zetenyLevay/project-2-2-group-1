@@ -153,7 +153,7 @@ double LocalEngine::getTotalEnergy() const {
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
-         for (int y = 0; y < height; y++){
+    for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
             int idx= getIndex(x,y);
 
