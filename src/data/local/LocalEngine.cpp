@@ -47,7 +47,6 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
 // Main Writer: Gecenio 
 // Reviewer: 
 // Contributers: Kristian, Berke
-// Mutates: grid, temperatures, current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history
 void LocalEngine::stepFoward() {
     thread->submitTask([this](SimulationState& state) {
         // If already calculated just set the grid and temperatures again 
@@ -93,7 +92,6 @@ void LocalEngine::stepFoward() {
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers:
-// Mutates: current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history, temperatures, grid
 void LocalEngine::stepBack() {
     thread->submitTask([this](SimulationState& state) {
         // Prevent going back beyond initial state
