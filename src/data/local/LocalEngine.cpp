@@ -124,6 +124,9 @@ void LocalEngine::stepBack() {
     });
 }
 
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers:
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
     thread->submitTask([this, step](SimulationState& state) {
@@ -140,6 +143,9 @@ void LocalEngine::seekTo(int step) {
     });
 }
 
+// Main Writer: Gecenio
+// Reviewer: 
+// Contributers:
 double LocalEngine::getTotalEnergy() const {
     // Can't really make this run on a seperate thread without changing the function signature.
     auto state = thread->getState();

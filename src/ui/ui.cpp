@@ -76,7 +76,9 @@ void launchGui() {
 
         double current_time = glfwGetTime();
         
-        SimulationState state = *engine->getState();
+        // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
+        std::shared_ptr<const SimulationState> statePtr = engine->getState();
+        const SimulationState& state = *statePtr;
         
         if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
             // Check whether you are at the end of the computed frames and it is a necessary save
