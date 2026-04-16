@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
         // runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType)
         // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>
 
-        if (argc < 7) {
+        if (argc < 6) {
             std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
             return 1;
         }
@@ -60,7 +60,6 @@ int main(int argc, char* argv[]) {
         int height = atoi(argv[3]);
         int NumberOfSims = atoi(argv[4]);
         std::string filename = argv[5];
-        int selectedSave = atoi(argv[6]);
 
         std::thread batchThread = runSimulations(width, height, NumberOfSims, filename);
         batchThread.join(); // Keeps thread alive until it is finished
