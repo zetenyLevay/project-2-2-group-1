@@ -243,10 +243,6 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         return nullptr;
     }
 
-    // Savetype
-    SaveType saveType;
-    in.read(reinterpret_cast<char*>(&saveType), sizeof(saveType));
-
     // Width and Height
     int w, h;
     in.read(reinterpret_cast<char*>(&w), sizeof(w));
@@ -294,7 +290,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers: 
-bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType) {
+bool saveSimulation(const SimulationState state, const std::string& filepath) {
     std::filesystem::path pathObj(filepath);
     std::filesystem::path dir = pathObj.parent_path();
 
@@ -305,9 +301,6 @@ bool saveSimulation(const SimulationState state, const std::string& filepath, co
 
     std::ofstream out(filepath, std::ios::binary);
     if (!out.is_open()) return false;
-
-    // Write the type of save
-    out.write(reinterpret_cast<const char*>(&saveType), sizeof(saveType));
 
     // Write width and height
     out.write(reinterpret_cast<const char*>(&state.width), sizeof(state.width));

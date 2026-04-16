@@ -22,10 +22,5 @@ public:
     void Stream(Grid &gridOld, Grid &gridNew);
 };
 
-enum SaveType {
-    NECESSARY,
-    COMPLETE
-};
-
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
-bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType = SaveType::COMPLETE);
+bool saveSimulation(const SimulationState state, const std::string& filepath);

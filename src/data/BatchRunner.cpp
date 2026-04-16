@@ -6,7 +6,7 @@
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers:
-std::thread runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType) {
+std::thread runSimulations(int width, int height, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
             std::cout << "Starting Simulation " << i + 1 << " of " << NumberOfSims << std::endl;
@@ -42,7 +42,7 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
                     path += ".dat";
 
                     // Save the simulation
-                    if (saveSimulation(*state, path, saveType)) {
+                    if (saveSimulation(*state, path)) {
                         std::cout << "Saved to: " << path << std::endl;
                     }
                     else {

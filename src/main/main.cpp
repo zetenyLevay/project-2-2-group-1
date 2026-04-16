@@ -61,10 +61,8 @@ int main(int argc, char* argv[]) {
         int NumberOfSims = atoi(argv[4]);
         std::string filename = argv[5];
         int selectedSave = atoi(argv[6]);
-        
-        SaveType saveType = selectedSave == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
 
-        std::thread batchThread = runSimulations(width, height, NumberOfSims, filename, saveType);
+        std::thread batchThread = runSimulations(width, height, NumberOfSims, filename);
         batchThread.join(); // Keeps thread alive until it is finished
     }
     else {

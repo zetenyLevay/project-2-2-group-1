@@ -286,11 +286,9 @@ void launchGui() {
 
             ImGui::PopItemWidth();
 
-            SaveType saveType = selected == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
-
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                if (saveSimulation(state, path, saveType)) {
+                if (saveSimulation(state, path)) {
                     std::cout << "Saved to: " << path << std::endl;
                 }
                 else {
@@ -381,24 +379,15 @@ void launchGui() {
             ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
             ImGui::PopItemWidth();
 
-            SaveType saveType = selected == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
-
             // Estimated File Size
             int cells = batchW * batchH;
             size_t necessary = 24 + (8 * cells);
             size_t complete = 24 + (80 * cells);
 
-            if (saveType == SaveType::NECESSARY) {
-                ImGui::Text("Size per frame: %zu Bytes", necessary);
-            }
-            else {
-                ImGui::Text("Size per frame: %zu Bytes", complete);
-            }
-
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename, saveType);
+                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename);
                 batchThread.detach();
             }
         }
