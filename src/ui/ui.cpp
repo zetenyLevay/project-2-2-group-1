@@ -82,12 +82,14 @@ void launchGui() {
         
         if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
             // Check whether you are at the end of the computed frames and it is a necessary save
-            if (state.current_step >= state.temperature_history.size() - 1 && state.grid_history.empty()) {
-                is_playing = false;
-            }
-            else {
-                engine->stepFoward();
-            }
+            // if (state.current_step >= state.temperature_history.size() - 1) {
+            //     is_playing = false;
+            // }
+            // else {
+            //     engine->stepFoward();
+            // }
+
+            engine->stepFoward();
 
             // Reset the timer for the next tick
             last_physics_tick = current_time;

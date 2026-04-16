@@ -39,7 +39,6 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->max_temp_history.push_back(MAX_TEMP);
     initialState->min_temp_history.push_back(ROOM_TEMP);
     initialState->temperature_history.push_back(initialState->temperatures);
-    initialState->grid_history.push_back(initialState->grid);
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(initialState);
@@ -56,15 +55,6 @@ void LocalEngine::stepFoward() {
             state.current_step++;
             state.temperatures = state.temperature_history[state.current_step];
 
-            // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-            if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-                state.grid = state.grid_history[state.current_step];
-            }
-            return;
-        }
-
-        if (state.grid_history.empty()) {
-            std::cout << "You have loaded a 'Necessary' save, you cannot compute new frames" << std::endl;
             return;
         }
 
@@ -97,9 +87,6 @@ void LocalEngine::stepFoward() {
         state.max_temp_history.push_back(current_max);
         state.min_temp_history.push_back(current_min);
         state.temperature_history.push_back(state.temperatures);
-
-        // Save grid state
-        state.grid_history.push_back(state.grid);
     });
 }
 
@@ -116,11 +103,6 @@ void LocalEngine::stepBack() {
         state.current_step--;
 
         state.temperatures = state.temperature_history[state.current_step];
-
-        // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-            state.grid = state.grid_history[state.current_step];
-        }
     });
 }
 
@@ -135,11 +117,6 @@ void LocalEngine::seekTo(int step) {
 
         state.current_step = step;
         state.temperatures = state.temperature_history[state.current_step];
-
-         // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-            state.grid = state.grid_history[state.current_step];
-        }
     });
 }
 
@@ -298,11 +275,8 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         in.read(reinterpret_cast<char*>(state->temperature_history[i].data()), state->cells * sizeof(double));
     }
 
-    // Clear the grid history because the engine constructer adds an initial state
-    state->grid_history.clear();
-
     if (saveType == SaveType::COMPLETE) {
-        state->grid_history.reserve(history_count);
+        // state->grid_history.reserve(history_count);
 
         // Get full grid history
         for (size_t i = 0; i < history_count; ++i) {
@@ -311,7 +285,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         for (int d = 0; d < 9; ++d) {
             in.read(reinterpret_cast<char*>(tempGrid.g[d].data()), state->cells * sizeof(double));
         }
-        state->grid_history.push_back(tempGrid);
+        // state->grid_history.push_back(tempGrid);
     }
     }
     
@@ -321,7 +295,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         state->temperatures = state->temperature_history.back();
 
         if (saveType == SaveType::COMPLETE) {
-            state->grid = state->grid_history.back();
+            // state->grid = state->grid_history.back();
         }
     }
 
@@ -369,7 +343,7 @@ bool saveSimulation(const SimulationState state, const std::string& filepath, co
         // Write grid history
         for (size_t i = 0; i < history_count; ++i) {
             for (int d = 0; d < 9; ++d) {
-                out.write(reinterpret_cast<const char*>(state.grid_history[i].g[d].data()), state.cells * sizeof(double));
+                // out.write(reinterpret_cast<const char*>(state.grid_history[i].g[d].data()), state.cells * sizeof(double));
             }
         }
     }

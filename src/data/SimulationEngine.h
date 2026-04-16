@@ -27,9 +27,6 @@ struct SimulationState {
     std::vector<double> max_temp_history;
     std::vector<double> min_temp_history;
     std::vector<std::vector<double>> temperature_history;
-
-    // State history of the grid, so we can rewind
-    std::vector<Grid> grid_history;
 };
 
 class SimulationEngine {
