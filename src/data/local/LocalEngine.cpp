@@ -275,28 +275,16 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         in.read(reinterpret_cast<char*>(state->temperature_history[i].data()), state->cells * sizeof(double));
     }
 
-    if (saveType == SaveType::COMPLETE) {
-        // state->grid_history.reserve(history_count);
 
-        // Get full grid history
-        for (size_t i = 0; i < history_count; ++i) {
-            Grid tempGrid(state->cells);
+    // Write most recent grid
+    for (int d = 0; d < 9; ++d) {
+        in.read(reinterpret_cast<char*>(state->grid.g[d].data()), state->cells * sizeof(double));
+    }
 
-        for (int d = 0; d < 9; ++d) {
-            in.read(reinterpret_cast<char*>(tempGrid.g[d].data()), state->cells * sizeof(double));
-        }
-        // state->grid_history.push_back(tempGrid);
-    }
-    }
-    
     // Go to the last frame of the sim
     if (history_count > 0) {
         state->current_step = state->time_history.back();
         state->temperatures = state->temperature_history.back();
-
-        if (saveType == SaveType::COMPLETE) {
-            // state->grid = state->grid_history.back();
-        }
     }
 
     in.close();
@@ -339,13 +327,9 @@ bool saveSimulation(const SimulationState state, const std::string& filepath, co
         out.write(reinterpret_cast<const char*>(state.temperature_history[i].data()), state.cells * sizeof(double));
     }
 
-    if (saveType == SaveType::COMPLETE) {
-        // Write grid history
-        for (size_t i = 0; i < history_count; ++i) {
-            for (int d = 0; d < 9; ++d) {
-                // out.write(reinterpret_cast<const char*>(state.grid_history[i].g[d].data()), state.cells * sizeof(double));
-            }
-        }
+    // Get most recent grid
+    for (int d = 0; d < 9; ++d) {
+        out.write(reinterpret_cast<const char*>(state.grid.g[d].data()), state.cells * sizeof(double));
     }
 
     out.close();
