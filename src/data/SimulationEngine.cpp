@@ -18,9 +18,14 @@ std::shared_ptr<SimulationState> SimulationEngine::getMutableState() {
 
 // Main Writer: Gecenio
 // Reviewer: 
-// Contributers: 
+// Contributers: Cosmin
 const int SimulationEngine::getIndex(int x, int y) {
-    int wrappedX = (x + this->width) % this->width;
-    int wrappedY = (y + this->height) % this->height;
-    return wrappedY * this->width + wrappedX;
+    if(y>=0 && y<height)
+    {
+        if(x>=0 && x<width)
+        {
+            return y * this->width + x;
+        }
+    }
+    throw std::out_of_range("Index out of bounds");
 }

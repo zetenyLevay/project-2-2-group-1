@@ -22,8 +22,9 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->heat_spread = 0.8;
     initialState->viscosity = 0.6;
     initialState->TempAvg=0.0;
+    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source 
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
-    initialState->temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
+    initialState->temperatures[initialState->heatSource] = MAX_TEMP; //give the chosen temeprature to the heat source
 
     // Initialize Grid 
     for (int i = 0; i < cells; i++) {
@@ -57,6 +58,13 @@ void LocalEngine::stepFoward() {
             return;
         }
 
+         //update heatSource back it its oringinal temperature
+        state.temperatures[state.heatSource]=MAX_TEMP;
+        for (int d = 0; d < 9; ++d) {
+            state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+            state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+        }
+
         Grid gridTemp(state.cells);
         this->Collision(state.heat_spread,state.TempAvg,state.viscosity, gridTemp, state.grid);
 
@@ -80,7 +88,15 @@ void LocalEngine::stepFoward() {
         }
         state.TempAvg= state.TempAvg / cells;
 
-
+        //update heatSource back it its oringinal temperature
+        //doing it twice to ensure that the temperature reamins consitent and there is no flow
+        state.temperatures[state.heatSource]=MAX_TEMP;
+        for (int d = 0; d < 9; ++d) {
+            state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+            state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+        }
+        
+        
         state.current_step++;
         state.time_history.push_back(state.current_step);
         state.max_temp_history.push_back(current_max);
