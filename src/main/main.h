@@ -12,8 +12,8 @@
 
 // Main Writer: Zétény
 // Physics constants
-const double MAX_TEMP = 1000.0;
-const double ROOM_TEMP = 20.0;
+const double MAX_TEMP = 100.0;
+const double ROOM_TEMP = 16.0;
 const double cs2= 1.0/3.0; //lattice constant speed of sound
 
 // Directions

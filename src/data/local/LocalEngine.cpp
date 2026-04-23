@@ -20,7 +20,7 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
 
     initialState->current_step = 0;
     initialState->heat_spread = 0.8;
-    initialState->viscosity = 0.6;
+    initialState->viscosity = 0.8;
     initialState->TempAvg=0.0;
     initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source 
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
@@ -166,7 +166,9 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             }
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
+            //fluid temeprature is normalized so that the simulation can handle really high temepratures
+            double normalizedTemp = (temp - ROOM_TEMP) / (MAX_TEMP - ROOM_TEMP);
+            double buoyancy = 0.015 *(normalizedTemp);  //0.015 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
