@@ -17,7 +17,7 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 50, int h = 50) {
+std::unique_ptr<SimulationEngine> createEngine(int w = 5, int h = 5) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
@@ -493,6 +493,11 @@ void launchGui() {
         // Sums up every temperature in the grid to prove no heat is lost
         double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
+        ImGui::Text("One time step real world equivalent: %.2f ms ", real_time_conversion*1000);
+        //ImGui::Text("Total real world time spent: %.2f seconds", real_time*state.current_step);
+        ImGui::Text("Max Velocity: %.10f", max_velocity);
+        ImGui::Text("Real Reynold %.10f", real_reynold);
+        ImGui::Text("LB Reynold %.10f", lb_reynold);
 
         ImGui::End();
 

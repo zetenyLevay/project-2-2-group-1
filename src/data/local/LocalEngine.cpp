@@ -19,8 +19,8 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->grid = initialState->cells;
 
     initialState->current_step = 0;
-    initialState->heat_spread = 0.8;
-    initialState->viscosity = 0.6;
+    initialState->heat_spread = heat_spread;
+    initialState->viscosity = lb_viscosity;
     initialState->TempAvg=0.0;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
     initialState->temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
@@ -183,12 +183,12 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/viscosity)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
+                double forceTerm=weights[d] *(1.0- 0.5/relaxation_time)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2) - (uy * buoyancy) / cs2);
                 //The complete Lattice Boltzmann Fluid movement formula
-                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/viscosity) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/relaxation_time) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
                 //The complete Lattice boltzmann Thermal formula
                 double cuT=cx[d]*ux + cy[d]*uy;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
                 
             }
         }
