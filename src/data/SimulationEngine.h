@@ -19,8 +19,11 @@ struct SimulationState {
     // State Checks
     int current_step;
     double heat_spread;
+    double tauT; //relaxation time temeprature
     double viscosity;
+    double tauF; //relaxation time fluid
     double TempAvg;
+    
 
     // Information for the stats
     std::vector<double> time_history;

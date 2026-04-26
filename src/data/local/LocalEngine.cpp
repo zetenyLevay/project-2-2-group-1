@@ -19,8 +19,13 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->grid = initialState->cells;
 
     initialState->current_step = 0;
-    initialState->heat_spread = 0.8;
-    initialState->viscosity = 0.8;
+    //placeholder values as this would have to be calculated from real values and turned into lattice units
+    initialState->heat_spread = 0.1;
+    initialState->viscosity = 0.1;
+    //relaxation times for heat_spread and visocsity
+    //we are using 3 because we divide by cs2 which is 1/3
+    initialState->tauF= initialState->viscosity*3 +0.5;
+    initialState->tauT= initialState->heat_spread*3  +0.5;
     initialState->TempAvg=0.0;
     initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source 
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
@@ -66,7 +71,7 @@ void LocalEngine::stepFoward() {
         }
 
         Grid gridTemp(state.cells);
-        this->Collision(state.heat_spread,state.TempAvg,state.viscosity, gridTemp, state.grid);
+        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
 
         this->Stream(gridTemp, state.grid);
 
@@ -149,7 +154,7 @@ double LocalEngine::getTotalEnergy() const {
 // Main Writer: Cosmin
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
+void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld){
     for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
             int idx= getIndex(x,y);
@@ -166,28 +171,26 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             }
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            //fluid temeprature is normalized so that the simulation can handle really high temepratures
-            double normalizedTemp = (temp - ROOM_TEMP) / (MAX_TEMP - ROOM_TEMP);
-            double buoyancy = 0.015 *(normalizedTemp);  //0.015 represents the thermal expansion strenght
+            double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
 
-            //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
+            //we use half force to better represent now and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
             //half force term of uy
             double uyF=0.0; 
             if(density!=0){
-                uyF=uy+  0.5 * buoyancy / density;
+                uyF=uy+  0.5 * buoyancy;
             }
 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/viscosity)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
+                double forceTerm=weights[d] *(1.0- 0.5/tauF)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
                 //The complete Lattice Boltzmann Fluid movement formula
-                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/viscosity) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/tauF) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
                 //The complete Lattice boltzmann Thermal formula
                 double cuT=cx[d]*ux + cy[d]*uy;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/heat_spread) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/tauT) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
                 
             }
         }

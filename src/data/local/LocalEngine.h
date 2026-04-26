@@ -17,7 +17,7 @@ public:
     double getTotalEnergy() const;
 
     // Physics functions
-    void Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld);
+    void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
     void Stream(Grid &gridOld, Grid &gridNew);
 };
