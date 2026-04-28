@@ -185,7 +185,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/tauF)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
+                double forceTerm=weights[d] *(1.0- 0.5/tauF)*(((cy[d]- uy )* buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
                 //The complete Lattice Boltzmann Fluid movement formula
                 gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/tauF) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
                 //The complete Lattice boltzmann Thermal formula
