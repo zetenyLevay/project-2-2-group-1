@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(project_2_2_group_1)
+project(project_2_2_group_1 LANGUAGES CXX CUDA)
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
 set(CMAKE_CXX_STANDARD 17) 
@@ -121,3 +121,18 @@ if(WIN32)
     target_link_libraries(test_stream ws2_32 wsock32)
 endif()
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
+
+
+
+add_executable(CollisionTest
+    src/CUDA/CollisionTest.cpp
+    src/CUDA/CollisionCUDA.cu
+    src/data/local/LocalEngine.cpp
+    src/data/SimulationEngine.cpp
+    src/thread/ReusableThread.cpp
+    
+)
+
+set_target_properties(CollisionTest PROPERTIES
+    CUDA_STANDARD 17
+)
