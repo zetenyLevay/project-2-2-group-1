@@ -17,7 +17,7 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 5, int h = 5) {
+std::unique_ptr<SimulationEngine> createEngine(int w = 50, int h = 50) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
