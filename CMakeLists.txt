@@ -4,6 +4,10 @@ project(project_2_2_group_1)
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
 set(CMAKE_CXX_STANDARD 17)
 
+# Option to build with GUI (requires OpenGL/GLFW/ImGui).
+# Set -DBUILD_GUI=OFF for headless/batch-only builds (e.g., on a cluster).
+option(BUILD_GUI "Build the GUI application" ON)
+
 # OpenMP support for parallelization
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
@@ -44,8 +48,13 @@ else()
     message(WARNING "OpenMP not found, compilation will proceed without parallelization")
 endif()
 
-find_package(Threads REQUIRED) # For WebSocket background threading
-find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration
+find_package(Threads REQUIRED) # For WebSocket and batch threading
+
+# GUI dependencies (OpenGL, GLFW)
+if(BUILD_GUI)
+    find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration
+    add_subdirectory(vendor/glfw-3.4)
+endif()
 
 include(FetchContent)
 
@@ -73,7 +82,7 @@ FetchContent_MakeAvailable(websocketpp)
 # Force C++11 to bypass boost
 add_library(websocketpp INTERFACE)
 target_include_directories(websocketpp INTERFACE ${websocketpp_SOURCE_DIR})
-target_compile_definitions(websocketpp INTERFACE 
+target_compile_definitions(websocketpp INTERFACE
     ASIO_STANDALONE
     _WEBSOCKETPP_CPP11_STL_
     _WEBSOCKETPP_CPP11_THREAD_
@@ -83,34 +92,43 @@ target_compile_definitions(websocketpp INTERFACE
     _WEBSOCKETPP_CPP11_MEMORY_
 )
 
-add_subdirectory(vendor/glfw-3.4)
+# GUI source files (ImGui, ImPlot)
+if(BUILD_GUI)
+    set(IMGUI_SOURCES
+        vendor/imgui/imgui.cpp
+        vendor/imgui/imgui_draw.cpp
+        vendor/imgui/imgui_widgets.cpp
+        vendor/imgui/imgui_tables.cpp
+        vendor/imgui/imgui_demo.cpp
+        vendor/imgui/backends/imgui_impl_glfw.cpp
+        vendor/imgui/backends/imgui_impl_opengl3.cpp
+    )
 
-set(IMGUI_SOURCES
-    vendor/imgui/imgui.cpp
-    vendor/imgui/imgui_draw.cpp
-    vendor/imgui/imgui_widgets.cpp
-    vendor/imgui/imgui_tables.cpp
-    vendor/imgui/imgui_demo.cpp
-    vendor/imgui/backends/imgui_impl_glfw.cpp
-    vendor/imgui/backends/imgui_impl_opengl3.cpp
-)
+    set(IMPLOT_SOURCES
+        vendor/implot/implot.cpp
+        vendor/implot/implot_items.cpp
+        vendor/implot/implot_demo.cpp
+    )
+endif()
 
-set(IMPLOT_SOURCES
-    vendor/implot/implot.cpp
-    vendor/implot/implot_items.cpp
-    vendor/implot/implot_demo.cpp
-)
-
+# Include directories
 include_directories(
     src/main
-    src/ui
-    src/physics
-    vendor/imgui
-    vendor/imgui/backends
-    vendor/implot
-    vendor/pfd
+    src/data
+    src/thread
 )
 
+if(BUILD_GUI)
+    include_directories(
+        src/ui
+        vendor/imgui
+        vendor/imgui/backends
+        vendor/implot
+        vendor/pfd
+    )
+endif()
+
+# Core simulation library (shared between GUI and batch builds)
 add_library(simulation_logic
     src/data/SimulationEngine.cpp
     src/data/SimulationEngine.h
@@ -127,36 +145,49 @@ add_library(simulation_logic
     src/main/main.h
 )
 
-add_executable(project_2_2_group_1
-    src/main/main.cpp
-    src/ui/ui.cpp
-    src/ui/ui.h
-    ${IMGUI_SOURCES}
-    ${IMPLOT_SOURCES}
-)
+# --- Main executables ---
+if(BUILD_GUI)
+    add_executable(project_2_2_group_1
+        src/main/main.cpp
+        src/ui/ui.cpp
+        src/ui/ui.h
+        ${IMGUI_SOURCES}
+        ${IMPLOT_SOURCES}
+    )
 
-# Link everything together for the main app
-target_link_libraries(project_2_2_group_1 
-    simulation_logic 
-    glfw 
-    OpenGL::GL 
-    asio 
-    websocketpp
-    Threads::Threads
-)
+    target_link_libraries(project_2_2_group_1
+        simulation_logic
+        glfw
+        OpenGL::GL
+        asio
+        websocketpp
+        Threads::Threads
+    )
 
-# Windows-specific networking libraries
-if(WIN32)
-    target_link_libraries(project_2_2_group_1 ws2_32 wsock32)
+    # Windows-specific networking libraries
+    if(WIN32)
+        target_link_libraries(project_2_2_group_1 ws2_32 wsock32)
+    endif()
+else()
+    add_executable(project_2_2_group_1
+        src/main/main_batch.cpp
+    )
+
+    target_link_libraries(project_2_2_group_1
+        simulation_logic
+        Threads::Threads
+    )
+
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(project_2_2_group_1 OpenMP::OpenMP_CXX)
+    endif()
 endif()
 
 # Testing
 enable_testing()
 add_executable(test_stream tests/test_stream.cpp)
-# The test only links the math and network, skipping the heavy UI stuff
 target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads)
 
-# Windows-specific networking libraries for tests
 if(WIN32)
     target_link_libraries(test_stream ws2_32 wsock32)
 endif()
@@ -169,7 +200,6 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(benchmark_lbm OpenMP::OpenMP_CXX)
 endif()
 
-# Windows-specific networking libraries for benchmark
 if(WIN32)
     target_link_libraries(benchmark_lbm ws2_32 wsock32)
 endif()

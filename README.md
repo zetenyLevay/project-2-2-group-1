@@ -12,9 +12,11 @@ Currently, this aims to be a robust CPU based prototype. To prepare for High-Per
 project_2_2_group_1/
 ├── CMakeLists.txt                  # Build configuration
 ├── README.md                       # Project documentation
+├── benchmark_lbm.cpp               # OpenMP benchmark tool
 ├── src/
 │   ├── main/
-│   │   ├── main.cpp                # Main simulation loop and execution
+│   │   ├── main.cpp                # GUI entry point (WebSocket + UI)
+│   │   ├── main_batch.cpp          # Batch-only entry point (headless)
 │   │   └── main.h                  # Shared constants, structs, and declarations
 │   ├── ui/
 │   │   ├── ui.cpp                  # User interface logic
@@ -23,56 +25,95 @@ project_2_2_group_1/
 │   │   ├── ReusableThread.cpp      # Thread logic         
 │   │   └── ReusableThread.h     
 │   └── data/   
-│       ├── SimulationEngine.cpp    #         
+│       ├── SimulationEngine.cpp    # Base simulation engine       
 │       ├── SimulationEngine.h  
-│       ├── BatchRunner.cpp         # Runs full simulations 
+│       ├── BatchRunner.cpp         # Batch simulation runner
 │       ├── BatchRunner.h    
 │       └── local/
-│           ├── LocalEngine.cpp     #
+│           ├── LocalEngine.cpp     # LBM physics (collision, streaming)
 │           └── LocalEngine.h    
-└── tests/
-    └── test_stream.cpp    # Isolated unit tests for the streaming/boundary module
+├── tests/
+│   └── test_stream.cpp             # Unit tests for streaming
+├── saves/                          # Simulation save files (generated)
+└── vendor/                         # Third-party dependencies
+    ├── glfw-3.4/
+    ├── imgui/
+    ├── implot/
+    └── pfd/
 ```
 
 ## Prerequisites
 To compile and run this project, you will need the following installed on your system:
 
-**C++ Compiler**: Must support C++14 (e.g., GCC, Clang, or MSVC).
+**C++ Compiler**: Must support **C++17** (e.g., GCC, Clang, or MSVC).
 
 **CMake**: Version **3.5 - 4.3**.
 
 ## Compilation Instructions
 This project uses CMake for an out-of-source build, keeping compiled binaries separate from the source code.
 
-1. Open your terminal and navigate to the root directory of the project.
+### GUI Build (default)
+Builds the full desktop application with heatmap visualization, controls, and WebSocket server.
 
-2. Create a dedicated build directory:
-    
-    ``` bash 
-    mkdir build
-    cd build
-    ```
-3. Generate build files using CMake:
-    ``` bash
-    cmake ..
-    ```
-4. Compile the project:
-    ``` bash
-    cmake --build .
-    ```
+``` bash
+mkdir build && cd build
+cmake ..
+cmake --build .
+./project_2_2_group_1
+```
+
+### Batch-Only Build (No GUI)
+For running simulations on a cluster or headless system without OpenGL/display dependencies.
+
+``` bash
+mkdir build && cd build
+cmake .. -DBUILD_GUI=OFF
+cmake --build .
+./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
+```
+
+### OpenMP 5.0 GPU Offloading (cluster with NVIDIA GPU)
+If your system has GCC with `nvptx-tools` installed, offloading is auto-detected.
+Otherwise, force-enable it for cluster builds:
+
+``` bash
+cmake .. -DENABLE_OMP_OFFLOAD=ON -DOMP_OFFLOAD_TARGET=nvptx-none
+cmake --build .
+```
+
+(Use `-DOMP_OFFLOAD_TARGET=amdgcn-amd-amdhsa` for AMD GPUs.)
 
 ## Running the Simulation
-Once compiled the main executable is in your build directory.
 
-To run the UI:
+### GUI Mode (default build)
+``` bash
+./project_2_2_group_1
+```
+Launches a desktop window with a heatmap visualization, simulation controls (play/pause, step, timeline), temperature convergence graph, and save/load functionality.
 
-Linux / macOS: ./project_2_2_group_1
+### Batch Mode
+Runs simulations to equilibrium without any display, useful for data collection or cluster execution.
 
-Windows: Debug\project_2_2_group_1.exe (or just project_2_2_group_1.exe depending on your compiler)
-
-To run the simulations: 
 ``` bash
 ./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
+```
+
+| Argument | Description |
+|---|---|
+| `width`, `height` | Grid dimensions in cells |
+| `numberOfSims` | Number of independent simulations to run |
+| `filename` | Output file base name (saved to `saves/`) |
+| `saveType` | `0` = Necessary (temperatures only), `1` = Complete (full grid state) |
+
+### Benchmark Mode
+Measures performance across grid sizes with and without OpenMP.
+
+``` bash
+./benchmark_lbm                    # Both sequential and OpenMP
+./benchmark_lbm --sequential       # CPU only
+./benchmark_lbm --openmp           # OpenMP only
+./benchmark_lbm --steps 200       # Custom step count
+OMP_NUM_THREADS=4 ./benchmark_lbm # Set thread count
 ```
 
 
