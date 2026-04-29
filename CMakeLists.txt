@@ -2,7 +2,47 @@ cmake_minimum_required(VERSION 3.14)
 project(project_2_2_group_1)
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
-set(CMAKE_CXX_STANDARD 17) 
+set(CMAKE_CXX_STANDARD 17)
+
+# OpenMP support for parallelization
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found, enabling parallelization")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+
+    # OpenMP 5.0 target offloading (CPU+GPU with same pragmas)
+    # Auto detected by default
+    # Override with -DENABLE_OMP_OFFLOAD=ON for cluster builds.
+    option(ENABLE_OMP_OFFLOAD "Force-enable OpenMP target offloading (use for cluster builds)" OFF)
+    set(OMP_OFFLOAD_TARGET "nvptx-none" CACHE STRING "OpenMP offload target (e.g. nvptx-none, amdgcn-amd-amdhsa)")
+
+    if(ENABLE_OMP_OFFLOAD)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+        add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
+        message(STATUS "OpenMP target offloading FORCE-ENABLED: ${OMP_OFFLOAD_TARGET}")
+    else()
+        include(CheckCXXSourceCompiles)
+        set(CMAKE_REQUIRED_FLAGS "-fopenmp -foffload=${OMP_OFFLOAD_TARGET}")
+        check_cxx_source_compiles("
+            int main() {
+                int x = 0;
+                #pragma omp target map(from: x)
+                x = 42;
+                return x - 42;
+            }
+        " HAS_OMP_OFFLOAD)
+        if(HAS_OMP_OFFLOAD)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+            add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
+            message(STATUS "OpenMP target offloading enabled: ${OMP_OFFLOAD_TARGET}")
+        else()
+            message(STATUS "OpenMP target offloading not available — using CPU-only OpenMP")
+        endif()
+        unset(CMAKE_REQUIRED_FLAGS)
+    endif()
+else()
+    message(WARNING "OpenMP not found, compilation will proceed without parallelization")
+endif()
 
 find_package(Threads REQUIRED) # For WebSocket background threading
 find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration
@@ -121,3 +161,15 @@ if(WIN32)
     target_link_libraries(test_stream ws2_32 wsock32)
 endif()
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
+
+# Benchmark executable
+add_executable(benchmark_lbm benchmark_lbm.cpp)
+target_link_libraries(benchmark_lbm simulation_logic asio websocketpp Threads::Threads)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(benchmark_lbm OpenMP::OpenMP_CXX)
+endif()
+
+# Windows-specific networking libraries for benchmark
+if(WIN32)
+    target_link_libraries(benchmark_lbm ws2_32 wsock32)
+endif()

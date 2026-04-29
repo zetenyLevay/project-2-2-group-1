@@ -3,6 +3,26 @@
 #include <vector>
 #include "../SimulationEngine.h"
 
+// Computes density, ux, uy from a flattened f array (direction-major, size = 9 * cells).
+#pragma omp declare target
+inline std::array<double, 3> computeDensityAndVelocity(const double* f, int cells, int idx) {
+    double density = 0.0;
+    double ux = 0.0;
+    double uy = 0.0;
+    for (int d = 0; d < 9; ++d) {
+        double val = f[d * cells + idx];
+        density += val;
+        ux += val * cx[d];
+        uy += val * cy[d];
+    }
+    if (density != 0.0) {
+        ux /= density;
+        uy /= density;
+    }
+    return {density, ux, uy};
+}
+#pragma omp end declare target
+
 class LocalEngine : public SimulationEngine {
 public:
     LocalEngine(int w, int h);
