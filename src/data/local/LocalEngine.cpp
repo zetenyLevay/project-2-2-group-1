@@ -173,7 +173,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             //buoyancy represents how much the hot fluid wants to rise up
             double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
 
-            //we use half force to better represent now and when the force is applied, the second half will be added from the forceTerm
+            //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
             //half force term of uy
             double uyF=0.0; 
