@@ -73,6 +73,8 @@ void launchGui() {
     double last_physics_tick = glfwGetTime();
     double physics_tick_rate = 0.01; // Run 1 physics step every 0.5 seconds
 
+    SimulationHistory& history = engine->history;
+
     // The main loop
     while(!glfwWindowShouldClose(window)) { 
         glfwPollEvents();
@@ -251,6 +253,7 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h));
+                history = engine->history;
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
@@ -285,7 +288,7 @@ void launchGui() {
 
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                if (saveSimulation(state, path)) {
+                if (saveSimulation(state, history, path)) {
                     std::cout << "Saved to: " << path << std::endl;
                 }
                 else {
@@ -382,8 +385,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = state.max_temp_history.back();
-        double coldSpot = state.min_temp_history.back();
+        double hotSpot = history.max_temp_history.back();
+        double coldSpot = history.min_temp_history.back();
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
@@ -416,21 +419,21 @@ void launchGui() {
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, scaleMax, ImGuiCond_Always);
 
-            double ratio = state.max_temp_history[state.current_step] / state.min_temp_history[state.current_step];
+            double ratio = history.max_temp_history[state.current_step] / history.min_temp_history[state.current_step];
 
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", history.time_history.data(), history.max_temp_history.data(), history.time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", history.time_history.data(), history.min_temp_history.data(), history.time_history.size());
 
 
             // Time step marker
-            if (!state.time_history.empty() && state.current_step < state.time_history.size()) {
+            if (!history.time_history.empty() && state.current_step < history.time_history.size()) {
                 // Get the current time, max and min
-                double cur_time = state.time_history[state.current_step];
-                double cur_max = state.max_temp_history[state.current_step];
-                double cur_min = state.min_temp_history[state.current_step];
+                double cur_time = history.time_history[state.current_step];
+                double cur_max = history.max_temp_history[state.current_step];
+                double cur_min = history.min_temp_history[state.current_step];
 
                 ImPlotSpec specLine;
                 specLine.LineColor = ImVec4(0.7f, 0.7f, 0.7f, 0.6f); // Grey
@@ -478,7 +481,7 @@ void launchGui() {
 
         /// Get current limits of the simulation
         int currentStep = state.current_step;
-        int maxStep = state.temperature_history.empty() ? 0 : state.temperature_history.size() - 1;
+        int maxStep = history.temperature_history.empty() ? 0 : history.temperature_history.size() - 1;
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 

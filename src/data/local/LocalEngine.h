@@ -23,4 +23,4 @@ public:
 };
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
-bool saveSimulation(const SimulationState state, const std::string& filepath);
+bool saveSimulation(const SimulationState& state, const SimulationHistory& history, const std::string& filepath);

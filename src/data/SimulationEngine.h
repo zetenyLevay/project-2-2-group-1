@@ -23,8 +23,9 @@ struct SimulationState {
     double viscosity;
     double tauF; //relaxation time fluid
     double TempAvg;
-    
+};
 
+struct SimulationHistory {
     // Information for the stats
     std::vector<double> time_history;
     std::vector<double> max_temp_history;
@@ -41,6 +42,8 @@ public:
     std::shared_ptr<const SimulationState> getState();
 
     std::shared_ptr<SimulationState> getMutableState();
+
+    SimulationHistory history;
 
     SimulationEngine(int w, int h);
 

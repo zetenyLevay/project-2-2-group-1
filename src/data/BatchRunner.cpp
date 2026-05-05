@@ -15,6 +15,8 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
             bool isComplete = false; // The simulation is complete once the hot spot and cold spot are equal 
             int expectedStep = 0;
 
+            SimulationHistory& history = engine.history;
+
             while (!isComplete) {
                 engine.stepFoward();
                 expectedStep++;
@@ -27,8 +29,8 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
                     state = engine.getState();
                 }
 
-                double maxTemp = state->max_temp_history.back();
-                double minTemp = state->min_temp_history.back();
+                double maxTemp = history.max_temp_history.back();
+                double minTemp = history.min_temp_history.back();
 
                 // The effective equilibream, no need to check for until it is exactly equal
                 if (std::abs(maxTemp - minTemp) < 0.1) {
@@ -42,7 +44,7 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
                     path += ".dat";
 
                     // Save the simulation
-                    if (saveSimulation(*state, path)) {
+                    if (saveSimulation(*state, history, path)) {
                         std::cout << "Saved to: " << path << std::endl;
                     }
                     else {
