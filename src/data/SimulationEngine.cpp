@@ -1,4 +1,6 @@
 #include "SimulationEngine.h"
+#include <stdexcept>
+
 
 SimulationEngine::SimulationEngine(int w, int h) : width(w), height(h), cells(w * h) {};
 

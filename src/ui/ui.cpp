@@ -29,10 +29,13 @@ std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
 
 }
 
+int defaultWidth = 51;
+int defaultHeight = 51;
+
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(51, 51);
+    engine = createEngine(defaultWidth, defaultHeight);
 
     launchGui();
 }
@@ -203,8 +206,8 @@ void launchGui() {
         ImGui::SeparatorText("Change Simulation");
 
         static bool createNew = false;
-        static int w = 3; // Default values
-        static int h = 2;
+        static int w = defaultWidth; // Default values
+        static int h = defaultHeight;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
         
@@ -313,8 +316,8 @@ void launchGui() {
             }
         }
         if (batch) {
-            static int batchW = 3; // Default values
-            static int batchH = 2;
+            static int batchW = defaultWidth; // Default values
+            static int batchH = defaultHeight;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
