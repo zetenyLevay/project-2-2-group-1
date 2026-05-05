@@ -107,6 +107,10 @@ void LocalEngine::stepFoward() {
         history.max_temp_history.push_back(current_max);
         history.min_temp_history.push_back(current_min);
         history.temperature_history.push_back(state.temperatures);
+
+        if (this->getAutoPlayStatus()) {
+            this->stepFoward();
+        }
     });
 }
 

@@ -57,6 +57,12 @@ public:
     virtual void stepBack() = 0;
 
     virtual void seekTo(int step) = 0;
+
+    bool getAutoPlayStatus();
+    void setAutoPlayStatus(bool status);
+
+    private:
+        bool autoPlay = false;
 };
 
 enum DataSource {

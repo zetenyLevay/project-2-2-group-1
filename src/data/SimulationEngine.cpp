@@ -4,6 +4,18 @@
 
 SimulationEngine::SimulationEngine(int w, int h) : width(w), height(h), cells(w * h) {};
 
+bool SimulationEngine::getAutoPlayStatus() {
+    return this->autoPlay;
+}
+
+void SimulationEngine::setAutoPlayStatus(bool status) {
+    this->autoPlay = status;
+
+    if (status) {
+        this->stepFoward();
+    }
+}
+
 /**
  * Gets the current state of the simulation.
  */

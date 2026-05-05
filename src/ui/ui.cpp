@@ -40,8 +40,6 @@ void startGui(DataSource source) {
     launchGui();
 }
 
-bool is_playing = false;
-
 // Main Writer: Kristian/Gecenio/Berke
 // Reviewer: 
 // Contributers: Zétény
@@ -85,20 +83,20 @@ void launchGui() {
         std::shared_ptr<const SimulationState> statePtr = engine->getState();
         const SimulationState& state = *statePtr;
         
-        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
-            // Check whether you are at the end of the computed frames and it is a necessary save
-            // if (state.current_step >= state.temperature_history.size() - 1) {
-            //     is_playing = false;
-            // }
-            // else {
-            //     engine->stepFoward();
-            // }
+        // if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
+        //     // Check whether you are at the end of the computed frames and it is a necessary save
+        //     // if (state.current_step >= state.temperature_history.size() - 1) {
+        //     //     is_playing = false;
+        //     // }
+        //     // else {
+        //     //     engine->stepFoward();
+        //     // }
 
-            engine->stepFoward();
+        //     engine->stepFoward();
 
-            // Reset the timer for the next tick
-            last_physics_tick = current_time;
-        }
+        //     // Reset the timer for the next tick
+        //     last_physics_tick = current_time;
+        // }
         
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -186,14 +184,14 @@ void launchGui() {
 
         ImGui::SeparatorText("Control Simulation");
 
-        if (is_playing) {
+        if (engine->getAutoPlayStatus()) {
             if (ImGui::Button("Pause Simulation")) {
-                is_playing = false;
+                engine->setAutoPlayStatus(false);
             }
         }      
         else {
             if (ImGui::Button("Play Simulation")) {
-                is_playing = true;
+                engine->setAutoPlayStatus(true);
             }
         }
         
@@ -489,7 +487,7 @@ void launchGui() {
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::SliderInt("##timeline", &currentStep, 0, maxStep, "Frame %d")) {
             // Pause sim
-            is_playing = false;
+            engine->setAutoPlayStatus(false);
 
             // Tell the engine to update the simulation
             engine->seekTo(currentStep);
