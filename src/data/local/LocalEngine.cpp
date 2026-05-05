@@ -63,8 +63,8 @@ void LocalEngine::stepFoward() {
             return;
         }
 
-         //update heatSource back it its oringinal temperature
-        state.temperatures[state.heatSource]=MAX_TEMP;
+        // update heatSource back it its oringinal temperature
+        state.temperatures[state.heatSource] = MAX_TEMP;
         for (int d = 0; d < 9; ++d) {
             state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
             state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
@@ -95,12 +95,15 @@ void LocalEngine::stepFoward() {
 
         //update heatSource back it its oringinal temperature
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        state.temperatures[state.heatSource]=MAX_TEMP;
+        state.temperatures[state.heatSource] = MAX_TEMP;
         for (int d = 0; d < 9; ++d) {
             state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
             state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
         }
         
+        if (state.temperatures[state.heatSource] > current_max) {
+            current_max = state.temperatures[state.heatSource];
+        }
         
         state.current_step++;
         history.time_history.push_back(state.current_step);
