@@ -169,7 +169,7 @@ void launchGui() {
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
                                 state.height, state.width,
-                                20.0, 100.0,
+                                ROOM_TEMP, MAX_TEMP,
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
