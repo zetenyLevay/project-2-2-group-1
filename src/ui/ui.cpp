@@ -311,6 +311,7 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
+                            history = engine->history;
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
