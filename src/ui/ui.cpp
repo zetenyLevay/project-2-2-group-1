@@ -17,7 +17,7 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 50, int h = 50) {
+std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
@@ -29,15 +29,16 @@ std::unique_ptr<SimulationEngine> createEngine(int w = 50, int h = 50) {
 
 }
 
+int defaultWidth = 51;
+int defaultHeight = 51;
+
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(50, 50);
+    engine = createEngine(defaultWidth, defaultHeight);
 
     launchGui();
 }
-
-bool is_playing = false;
 
 // Main Writer: Kristian/Gecenio/Berke
 // Reviewer: 
@@ -68,7 +69,9 @@ void launchGui() {
     ImGui_ImplOpenGL3_Init("#version 330");
 
     double last_physics_tick = glfwGetTime();
-    double physics_tick_rate = 0.05; // Run 1 physics step every 0.5 seconds
+    double physics_tick_rate = 0.01; // Run 1 physics step every 0.5 seconds
+
+    //SimulationHistory& history = engine->history;
 
     // The main loop
     while(!glfwWindowShouldClose(window)) { 
@@ -79,21 +82,7 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         std::shared_ptr<const SimulationState> statePtr = engine->getState();
         const SimulationState& state = *statePtr;
-        
-        if (is_playing && (current_time - last_physics_tick >= physics_tick_rate)) {
-            // Check whether you are at the end of the computed frames and it is a necessary save
-            // if (state.current_step >= state.temperature_history.size() - 1) {
-            //     is_playing = false;
-            // }
-            // else {
-            //     engine->stepFoward();
-            // }
-
-            engine->stepFoward();
-
-            // Reset the timer for the next tick
-            last_physics_tick = current_time;
-        }
+        SimulationHistory& history = engine->history;
         
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -166,7 +155,7 @@ void launchGui() {
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
                                 state.height, state.width,
-                                20.0, 100.0,
+                                ROOM_TEMP, MAX_TEMP,
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
@@ -181,14 +170,14 @@ void launchGui() {
 
         ImGui::SeparatorText("Control Simulation");
 
-        if (is_playing) {
+        if (engine->getAutoPlayStatus()) {
             if (ImGui::Button("Pause Simulation")) {
-                is_playing = false;
+                engine->setAutoPlayStatus(false);
             }
         }      
         else {
             if (ImGui::Button("Play Simulation")) {
-                is_playing = true;
+                engine->setAutoPlayStatus(true);
             }
         }
         
@@ -203,10 +192,12 @@ void launchGui() {
         ImGui::SeparatorText("Change Simulation");
 
         static bool createNew = false;
-        static int w = 3; // Default values
-        static int h = 2;
+        static int w = defaultWidth; // Default values
+        static int h = defaultHeight;
+        static int temperature = MAX_TEMP;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
+        float tempWidth = (0.25f * windowWidth);
         
         // Click to open/close create dropdown
         if (ImGui::Button("Create New Simulation")) {
@@ -231,6 +222,12 @@ void launchGui() {
             ImGui::SameLine();
             ImGui::InputInt("##Height", &h);
 
+            // Get temperature
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Temperature:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(tempWidth);
+            ImGui::InputInt("##Temperature", &temperature);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
@@ -240,6 +237,8 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h));
+                //history = engine->history;
+                MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
                 createNew = false;
@@ -273,7 +272,7 @@ void launchGui() {
 
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                if (saveSimulation(state, path)) {
+                if (saveSimulation(state, history, path)) {
                     std::cout << "Saved to: " << path << std::endl;
                 }
                 else {
@@ -296,6 +295,7 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
+                            //history = engine->history;
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
@@ -313,8 +313,9 @@ void launchGui() {
             }
         }
         if (batch) {
-            static int batchW = 3; // Default values
-            static int batchH = 2;
+            static int batchW = defaultWidth; // Default values
+            static int batchH = defaultHeight;
+            static int batchTemperature = MAX_TEMP;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
@@ -331,6 +332,13 @@ void launchGui() {
             ImGui::Text("Height:");
             ImGui::SameLine();
             ImGui::InputInt("##Height", &batchH);
+
+            // Get temperature
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Temperature:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(tempWidth);
+            ImGui::InputInt("##Temperature", &batchTemperature);
             ImGui::PopItemWidth();
 
             // Simulation Input
@@ -348,11 +356,6 @@ void launchGui() {
             ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
             ImGui::PopItemWidth();
 
-            // Estimated File Size
-            int cells = batchW * batchH;
-            size_t necessary = 24 + (8 * cells);
-            size_t complete = 24 + (80 * cells);
-
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
@@ -367,8 +370,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = state.max_temp_history.back();
-        double coldSpot = state.min_temp_history.back();
+        double hotSpot = history.max_temp_history.back();
+        double coldSpot = history.min_temp_history.back();
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
@@ -401,21 +404,21 @@ void launchGui() {
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, scaleMax, ImGuiCond_Always);
 
-            double ratio = state.max_temp_history[state.current_step] / state.min_temp_history[state.current_step];
+            double ratio = history.max_temp_history[state.current_step] / history.min_temp_history[state.current_step];
 
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", state.time_history.data(), state.max_temp_history.data(), state.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", state.time_history.data(), state.min_temp_history.data(), state.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", history.time_history.data(), history.max_temp_history.data(), history.time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", history.time_history.data(), history.min_temp_history.data(), history.time_history.size());
 
 
             // Time step marker
-            if (!state.time_history.empty() && state.current_step < state.time_history.size()) {
+            if (!history.time_history.empty() && state.current_step < history.time_history.size()) {
                 // Get the current time, max and min
-                double cur_time = state.time_history[state.current_step];
-                double cur_max = state.max_temp_history[state.current_step];
-                double cur_min = state.min_temp_history[state.current_step];
+                double cur_time = history.time_history[state.current_step];
+                double cur_max = history.max_temp_history[state.current_step];
+                double cur_min = history.min_temp_history[state.current_step];
 
                 ImPlotSpec specLine;
                 specLine.LineColor = ImVec4(0.7f, 0.7f, 0.7f, 0.6f); // Grey
@@ -463,14 +466,14 @@ void launchGui() {
 
         /// Get current limits of the simulation
         int currentStep = state.current_step;
-        int maxStep = state.temperature_history.empty() ? 0 : state.temperature_history.size() - 1;
+        int maxStep = history.temperature_history.empty() ? 0 : history.temperature_history.size() - 1;
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 
         ImGui::SetNextItemWidth(-1.0f);
         if (ImGui::SliderInt("##timeline", &currentStep, 0, maxStep, "Frame %d")) {
             // Pause sim
-            is_playing = false;
+            engine->setAutoPlayStatus(false);
 
             // Tell the engine to update the simulation
             engine->seekTo(currentStep);

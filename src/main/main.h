@@ -12,10 +12,9 @@
 
 // Main Writer: Zétény
 // Physics constants
-const double MAX_TEMP = 10000.0;
+inline double MAX_TEMP = 2000.0;
 const double ROOM_TEMP = 20.0;
 const double cs2= 1.0/3.0; //lattice constant speed of sound
-
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,-1,1};
 const int cy[9] = {0,0,1,0,-1,1,1,-1,-1};
