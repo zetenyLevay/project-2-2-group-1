@@ -208,8 +208,10 @@ void launchGui() {
         static bool createNew = false;
         static int w = defaultWidth; // Default values
         static int h = defaultHeight;
+        static int temperature = MAX_TEMP;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
+        float tempWidth = (0.25f * windowWidth);
         
         // Click to open/close create dropdown
         if (ImGui::Button("Create New Simulation")) {
@@ -234,6 +236,12 @@ void launchGui() {
             ImGui::SameLine();
             ImGui::InputInt("##Height", &h);
 
+            // Get temperature
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Temperature:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(tempWidth);
+            ImGui::InputInt("##Temperature", &temperature);
             ImGui::PopItemWidth();
 
             ImGui::SameLine();
@@ -243,6 +251,7 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h));
+                MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
                 createNew = false;
@@ -318,6 +327,7 @@ void launchGui() {
         if (batch) {
             static int batchW = defaultWidth; // Default values
             static int batchH = defaultHeight;
+            static int batchTemperature = MAX_TEMP;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
@@ -334,6 +344,13 @@ void launchGui() {
             ImGui::Text("Height:");
             ImGui::SameLine();
             ImGui::InputInt("##Height", &batchH);
+
+            // Get temperature
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Temperature:");
+            ImGui::SameLine();
+            ImGui::PushItemWidth(tempWidth);
+            ImGui::InputInt("##Temperature", &batchTemperature);
             ImGui::PopItemWidth();
 
             // Simulation Input
@@ -350,11 +367,6 @@ void launchGui() {
             ImGui::SameLine();
             ImGui::InputText("##File Name", filenameBuffer, sizeof(filenameBuffer));
             ImGui::PopItemWidth();
-
-            // Estimated File Size
-            int cells = batchW * batchH;
-            size_t necessary = 24 + (8 * cells);
-            size_t complete = 24 + (80 * cells);
 
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {

@@ -37,7 +37,7 @@ project_2_2_group_1/
 ## Prerequisites
 To compile and run this project, you will need the following installed on your system:
 
-**C++ Compiler**: Must support C++14 (e.g., GCC, Clang, or MSVC).
+**C++ Compiler**: Must support C++17 (e.g., GCC, Clang, or MSVC).
 
 **CMake**: Version **3.5 - 4.3**.
 
