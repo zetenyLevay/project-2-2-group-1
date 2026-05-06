@@ -373,8 +373,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = history.max_temp_history.back();
-        double coldSpot = history.min_temp_history.back();
+        double hotSpot = history.max_temp_history[state.current_step];
+        double coldSpot = history.min_temp_history[state.current_step];
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
