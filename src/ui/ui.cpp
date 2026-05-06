@@ -284,7 +284,10 @@ void launchGui() {
         }
 
         if (ImGui::Button("Load Simulation")) {
-            auto f = pfd::open_file("Choose a save", "", {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            // Get absolute path of the saves folder
+            std::string saveDirectory = std::filesystem::absolute(folder).string();
+
+            auto f = pfd::open_file("Choose a save", saveDirectory, {"Data FIles (.dat)", "*.dat", "All Files", "*"});
             
             if (!f.result().empty()) {
                 std::string selectedPath = f.result()[0];
