@@ -48,20 +48,21 @@ const double heat_spread = 1.0;
 // Contributers: Kristian
 int main(int argc, char* argv[]) {
     if (argc >= 2 && std::string(argv[1]) == "--batch") {
-        // runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType)
-        // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>
+        // runSimulations(int width, int height, int temperature, int NumberOfSims, const std::string& filename)
+        // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <temperature> <NumberOfSims> <filename>
 
-        if (argc < 6) {
-            std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
+        if (argc < 7) {
+            std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <temperature> <NumberOfSims> <filename>" << std::endl;
             return 1;
         }
 
         int width = atoi(argv[2]);
         int height = atoi(argv[3]);
-        int NumberOfSims = atoi(argv[4]);
-        std::string filename = argv[5];
+        int temperature = atoi(argv[4]);
+        int NumberOfSims = atoi(argv[5]);
+        std::string filename = argv[6];
 
-        std::thread batchThread = runSimulations(width, height, NumberOfSims, filename);
+        std::thread batchThread = runSimulations(width, height, temperature, NumberOfSims, filename);
         batchThread.join(); // Keeps thread alive until it is finished
     }
     else {

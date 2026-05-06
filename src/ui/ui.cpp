@@ -295,7 +295,10 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
-                            //history = engine->history;
+
+                            MAX_TEMP = engine->history.max_temp_history.front();
+                            scaleMax = MAX_TEMP * 1.1;
+
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
@@ -359,7 +362,7 @@ void launchGui() {
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename);
+                std::thread batchThread = runSimulations(batchW, batchH, batchTemperature, NumberOfSims, filename);
                 batchThread.detach();
             }
         }
