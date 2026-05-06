@@ -162,7 +162,6 @@ double LocalEngine::getTotalEnergy() const {
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld){
-void LocalEngine::Collision(double heat_spread, double TempAvg, double viscosity, Grid& gridNew, Grid& gridOld) { 
     
     //gridNew - output grid, gridOld - input grid
     //heat_spred - controls temperature update
