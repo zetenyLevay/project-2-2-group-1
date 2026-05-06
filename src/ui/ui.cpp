@@ -17,11 +17,11 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
+std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSource) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
-            return std::make_unique<LocalEngine>(w, h);
+            return std::make_unique<LocalEngine>(w, h, constantHeatSource);
         default:
             std::cerr << "Unknown data source" << std::endl;
             return nullptr;
@@ -35,7 +35,7 @@ int defaultHeight = 51;
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(defaultWidth, defaultHeight);
+    engine = createEngine(defaultWidth, defaultHeight, true);
 
     launchGui();
 }
@@ -195,6 +195,7 @@ void launchGui() {
         static int w = defaultWidth; // Default values
         static int h = defaultHeight;
         static int temperature = MAX_TEMP;
+        static bool constantHeat = true;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
         float tempWidth = (0.25f * windowWidth);
@@ -230,13 +231,18 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &temperature);
             ImGui::PopItemWidth();
 
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &constantHeat);
+
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                // Kill the compute thread.
+                // Kill the compute thread
                 engine->thread->terminate();
 
                 // Create and display the new sim
-                engine = std::move(createEngine(w, h));
+                engine = std::move(createEngine(w, h, constantHeat));
                 //history = engine->history;
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
@@ -246,7 +252,7 @@ void launchGui() {
         }
 
         static bool save = false;
-        static char filenameBuffer[256] = "sim_01";
+        static char filenameBuffer[256] = "sim";
         std::string folder = "../saves/";
         std::string path = folder + std::string(filenameBuffer) + ".dat";
         static int selected = 0;
@@ -322,6 +328,7 @@ void launchGui() {
             static int batchW = defaultWidth; // Default values
             static int batchH = defaultHeight;
             static int batchTemperature = MAX_TEMP;
+            static bool batchConstantHeat = true;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
@@ -347,6 +354,12 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &batchTemperature);
             ImGui::PopItemWidth();
 
+            // Get constant heat
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &batchConstantHeat);
+
             // Simulation Input
             ImGui::AlignTextToFramePadding();
             ImGui::Text("# of Simulations:");
@@ -365,8 +378,9 @@ void launchGui() {
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                std::thread batchThread = runSimulations(batchW, batchH, batchTemperature, NumberOfSims, filename);
+                std::thread batchThread = runSimulations(batchW, batchH, batchTemperature, batchConstantHeat, NumberOfSims, filename);
                 batchThread.detach();
+                batch = false;
             }
         }
 
