@@ -71,7 +71,7 @@ void launchGui() {
     double last_physics_tick = glfwGetTime();
     double physics_tick_rate = 0.01; // Run 1 physics step every 0.5 seconds
 
-    SimulationHistory& history = engine->history;
+    //SimulationHistory& history = engine->history; DO NOT UNCOMMENT, IT HAS NO EFFECT ON PERFORMANCE (from what I can tell) 
 
     // The main loop
     while(!glfwWindowShouldClose(window)) { 
@@ -82,6 +82,8 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         std::shared_ptr<const SimulationState> statePtr = engine->getState();
         const SimulationState& state = *statePtr;
+
+        SimulationHistory& history = engine->history; // DO NOT DELETE, WHEN YOU DO IT BREAKS THE CREATE BUTTON
         
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -242,7 +244,7 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h, constantHeat));
-                history = engine->history;
+                //history = engine->history; DO NOT UNCOMMENT
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
@@ -303,7 +305,7 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
-                            history = engine->history;
+                            //history = engine->history; DO NOT UNCOMMENT
 
                             MAX_TEMP = engine->history.max_temp_history.front();
                             scaleMax = MAX_TEMP * 1.1;
