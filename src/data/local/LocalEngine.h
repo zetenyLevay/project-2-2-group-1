@@ -5,7 +5,7 @@
 
 class LocalEngine : public SimulationEngine {
 public:
-    LocalEngine(int w, int h);
+    LocalEngine(int w, int h, bool constantHeatSource);
 
     // Step foward one frame
     void stepFoward();

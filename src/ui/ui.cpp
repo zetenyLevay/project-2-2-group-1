@@ -17,11 +17,11 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
+std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSource) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
-            return std::make_unique<LocalEngine>(w, h);
+            return std::make_unique<LocalEngine>(w, h, constantHeatSource);
         default:
             std::cerr << "Unknown data source" << std::endl;
             return nullptr;
@@ -35,7 +35,7 @@ int defaultHeight = 51;
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(defaultWidth, defaultHeight);
+    engine = createEngine(defaultWidth, defaultHeight, true);
 
     launchGui();
 }
@@ -71,7 +71,7 @@ void launchGui() {
     double last_physics_tick = glfwGetTime();
     double physics_tick_rate = 0.01; // Run 1 physics step every 0.5 seconds
 
-    //SimulationHistory& history = engine->history;
+    //SimulationHistory& history = engine->history; DO NOT UNCOMMENT, IT HAS NO EFFECT ON PERFORMANCE (from what I can tell) 
 
     // The main loop
     while(!glfwWindowShouldClose(window)) { 
@@ -82,7 +82,8 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         std::shared_ptr<const SimulationState> statePtr = engine->getState();
         const SimulationState& state = *statePtr;
-        SimulationHistory& history = engine->history;
+
+        SimulationHistory& history = engine->history; // DO NOT DELETE, WHEN YOU DO IT BREAKS THE CREATE BUTTON
         
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -195,6 +196,7 @@ void launchGui() {
         static int w = defaultWidth; // Default values
         static int h = defaultHeight;
         static int temperature = MAX_TEMP;
+        static bool constantHeat = true;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
         float tempWidth = (0.25f * windowWidth);
@@ -230,14 +232,19 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &temperature);
             ImGui::PopItemWidth();
 
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &constantHeat);
+
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                // Kill the compute thread.
+                // Kill the compute thread
                 engine->thread->terminate();
 
                 // Create and display the new sim
-                engine = std::move(createEngine(w, h));
-                //history = engine->history;
+                engine = std::move(createEngine(w, h, constantHeat));
+                //history = engine->history; DO NOT UNCOMMENT
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
@@ -246,7 +253,7 @@ void launchGui() {
         }
 
         static bool save = false;
-        static char filenameBuffer[256] = "sim_01";
+        static char filenameBuffer[256] = "sim";
         std::string folder = "../saves/";
         std::string path = folder + std::string(filenameBuffer) + ".dat";
         static int selected = 0;
@@ -284,7 +291,10 @@ void launchGui() {
         }
 
         if (ImGui::Button("Load Simulation")) {
-            auto f = pfd::open_file("Choose a save", "", {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            // Get absolute path of the saves folder
+            std::string saveDirectory = std::filesystem::absolute(folder).string();
+
+            auto f = pfd::open_file("Choose a save", saveDirectory, {"Data FIles (.dat)", "*.dat", "All Files", "*"});
             
             if (!f.result().empty()) {
                 std::string selectedPath = f.result()[0];
@@ -295,7 +305,11 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
-                            //history = engine->history;
+                            //history = engine->history; DO NOT UNCOMMENT
+
+                            MAX_TEMP = engine->history.max_temp_history.front();
+                            scaleMax = MAX_TEMP * 1.1;
+
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
@@ -316,6 +330,7 @@ void launchGui() {
             static int batchW = defaultWidth; // Default values
             static int batchH = defaultHeight;
             static int batchTemperature = MAX_TEMP;
+            static bool batchConstantHeat = true;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
@@ -341,6 +356,12 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &batchTemperature);
             ImGui::PopItemWidth();
 
+            // Get constant heat
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &batchConstantHeat);
+
             // Simulation Input
             ImGui::AlignTextToFramePadding();
             ImGui::Text("# of Simulations:");
@@ -359,8 +380,9 @@ void launchGui() {
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename);
+                std::thread batchThread = runSimulations(batchW, batchH, batchTemperature, batchConstantHeat, NumberOfSims, filename);
                 batchThread.detach();
+                batch = false;
             }
         }
 
@@ -370,8 +392,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = history.max_temp_history.back();
-        double coldSpot = history.min_temp_history.back();
+        double hotSpot = history.max_temp_history[state.current_step];
+        double coldSpot = history.min_temp_history[state.current_step];
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
