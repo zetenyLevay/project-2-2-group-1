@@ -183,29 +183,50 @@ void launchGui() {
 
             // Drawing the Background/Room
             ImDrawList* drawList = ImPlot::GetPlotDrawList();
+            ImU32 lineColor = IM_COL32(0, 0, 0, 255);
+            float lineWidth = 2.0f;
 
-            // Radiator
+            // Radiator 
             double radWidth = state.width * 0.07;
             double radHeight = state.height * 0.4;
             double radX = 1;
-            double radY = 2;
-            
+            double radY = 0;
+            double valveR = radWidth / 8;
+            double valveX = radX + (radWidth / 2);
+            double valveY = radY + radHeight - (2 * valveR) - 1;
+
+            // Main Body
             ImVec2 radTopLeft = ImPlot::PlotToPixels(radX, radY + radHeight);
             ImVec2 radBottomRight = ImPlot::PlotToPixels(radX + radWidth, radY);
-            drawList->AddRect(radTopLeft, radBottomRight, IM_COL32(0, 0, 0, 255), 5.0f, 0, 2.0f);
-
-            double valveR = radWidth / 6;
-            ImVec2 valveCenter = ImPlot::PlotToPixels(valveR + radX, radHeight + radY - valveR);
-            ImVec2 valveEdge = ImPlot::PlotToPixels(valveR + radX + valveR, radHeight + radY - valveR);
+            drawList->AddRect(radTopLeft, radBottomRight, lineColor, 5.0f, 0, lineWidth);
+            
+            // Valve
+            ImVec2 valveCenter = ImPlot::PlotToPixels(valveX, valveY);
+            ImVec2 valveEdge = ImPlot::PlotToPixels(valveX + valveR, valveY);
             float valveRPixels = std::abs(valveEdge.x - valveCenter.x);
-            drawList->AddCircle(valveCenter, valveRPixels, IM_COL32(0, 0, 0, 255), 0, 2.0f);
+            drawList->AddCircle(valveCenter, valveRPixels, lineColor, 0, lineWidth);
 
 
             // Window
-            double winWidth = state.width * 0.4;
+            double winWidth = state.width * 0.3;
             double winHeight = state.height * 0.3;
-            double winX = state.width * 0.4;
+            double winX = state.width * 0.55;
             double winY = state.width * 0.5;
+            double grill1X = winX + (winWidth / 2);
+        
+
+            // Main Pane
+            ImVec2 winTopLeft = ImPlot::PlotToPixels(winX, winY + winHeight);
+            ImVec2 winBottomRight = ImPlot::PlotToPixels(winX + winWidth, winY);
+            drawList->AddRect(winTopLeft, winBottomRight, lineColor, 5.0f, 0, lineWidth);
+
+            // Grills
+            ImVec2 grill1Top = ImPlot::PlotToPixels(grill1X, winY + winHeight);
+            ImVec2 grillBottom = ImPlot::PlotToPixels(grill1X, winY);
+            ImVec2 grillLeft = ImPlot::PlotToPixels(winX, (winHeight / 2) + winY);
+            ImVec2 grillRight = ImPlot::PlotToPixels(winX + winWidth, (winHeight / 2) + winY);
+            drawList->AddLine(grill1Top, grillBottom, lineColor, lineWidth);
+            drawList->AddLine(grillLeft, grillRight, lineColor, lineWidth);
 
             ImPlot::PopColormap();
             ImPlot::EndPlot();
