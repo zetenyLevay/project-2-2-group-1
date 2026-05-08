@@ -61,6 +61,11 @@ void LocalEngine::stepFoward() {
             state.current_step++;
             state.temperatures = history.temperature_history[state.current_step];
 
+            // Auto play check
+            if (this->getAutoPlayStatus()) {
+                this->stepFoward();
+            }
+            
             return;
         }
 
@@ -116,6 +121,7 @@ void LocalEngine::stepFoward() {
         history.min_temp_history.push_back(current_min);
         history.temperature_history.push_back(state.temperatures);
 
+        // Auto play check
         if (this->getAutoPlayStatus()) {
             this->stepFoward();
         }
