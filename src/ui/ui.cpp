@@ -136,8 +136,15 @@ void launchGui() {
         // Gui elements go down below
         
         // --- Simulation window ---
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::Begin("Simulation");
+        ImGui::PopStyleVar();
 
+        // Get rid of weird borders
+        ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0.0f, 0.0f));
+
+        // Change room color
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.0f/255.0f, 0.0f/255.0f, 0.0f/255.0f, 1.0f));
         // We use -1.0f to make the plot fill the entire available window space
         if (ImPlot::BeginPlot("##HeatmapCanvas", ImVec2(-1.0f, -1.0f), ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
             
@@ -147,11 +154,24 @@ void launchGui() {
             // Force the plot to match the exact dimensions of the grid
             ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
 
-            // Change the colors 
-            // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
-            // ImPlotColormap_Hot goes from Black (Cold) to White/Yellow (Hot)
-            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            /*
+            USED FOR TRANSPARENCY, DONT DELETE MIGHT USE LATER
+            // Create new colormap, take each color from the Jet color map and change the opacity to 50%
+            static ImPlotColormap transparentJet = -1;
+            if (transparentJet == -1) {
+                ImVec4 custom_colors[128];
+                for (int i = 0; i < 128; ++i) {
+                    float ratio = float(i) / 127.0f;
+                    custom_colors[i] = ImPlot::SampleColormap((float)i / 127.0f, ImPlotColormap_Jet);
+                    custom_colors[i].w = ratio * 0.85f;
+                }
+                transparentJet = ImPlot::AddColormap("Jet_Transparent", custom_colors, 128);
+            }
+            */
 
+            // Apply the new color map
+            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
@@ -160,10 +180,39 @@ void launchGui() {
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
-            ImPlot::PopColormap();
 
+            // Drawing the Background/Room
+            ImDrawList* drawList = ImPlot::GetPlotDrawList();
+
+            // Radiator
+            double radWidth = state.width * 0.07;
+            double radHeight = state.height * 0.4;
+            double radX = 1;
+            double radY = 2;
+            
+            ImVec2 radTopLeft = ImPlot::PlotToPixels(radX, radY + radHeight);
+            ImVec2 radBottomRight = ImPlot::PlotToPixels(radX + radWidth, radY);
+            drawList->AddRect(radTopLeft, radBottomRight, IM_COL32(0, 0, 0, 255), 5.0f, 0, 2.0f);
+
+            double valveR = radWidth / 6;
+            ImVec2 valveCenter = ImPlot::PlotToPixels(valveR + radX, radHeight + radY - valveR);
+            ImVec2 valveEdge = ImPlot::PlotToPixels(valveR + radX + valveR, radHeight + radY - valveR);
+            float valveRPixels = std::abs(valveEdge.x - valveCenter.x);
+            drawList->AddCircle(valveCenter, valveRPixels, IM_COL32(0, 0, 0, 255), 0, 2.0f);
+
+
+            // Window
+            double winWidth = state.width * 0.4;
+            double winHeight = state.height * 0.3;
+            double winX = state.width * 0.4;
+            double winY = state.width * 0.5;
+
+            ImPlot::PopColormap();
             ImPlot::EndPlot();
         }        
+        ImPlot::PopStyleColor();
+        ImPlot::PopStyleVar();
+
         ImGui::End();
 
         // --- Simulation controls ---
