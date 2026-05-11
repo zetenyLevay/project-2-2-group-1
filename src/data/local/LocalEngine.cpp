@@ -8,7 +8,7 @@
 // Main Writer: Berke/Kristian 
 // Reviewer: 
 // Contributers: 
-LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height) {
+LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : SimulationEngine(width, height) {
     auto initialState = std::make_shared<SimulationState>();
 
     initialState->width = width;
@@ -23,6 +23,16 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
     initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
+    //placeholder values as this would have to be calculated from real values and turned into lattice units
+    initialState->heat_spread = 0.1;
+    initialState->viscosity = 0.1;
+    //relaxation times for heat_spread and visocsity
+    //we are using 3 because we divide by cs2 which is 1/3
+    initialState->tauF = initialState->viscosity*3 +0.5;
+    initialState->tauT = initialState->heat_spread*3  +0.5;
+    initialState->TempAvg = 0.0;
+    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
+    initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
     initialState->temperatures[initialState->heatSource] = MAX_TEMP; //give the chosen temeprature to the heat source
 
@@ -55,14 +65,21 @@ void LocalEngine::stepFoward() {
             state.current_step++;
             state.temperatures = history.temperature_history[state.current_step];
 
+            // Auto play check
+            if (this->getAutoPlayStatus()) {
+                this->stepFoward();
+            }
+
             return;
         }
 
         // update heatSource back it its oringinal temperature
-        state.temperatures[state.heatSource] = MAX_TEMP;
-        for (int d = 0; d < 9; ++d) {
-            state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-            //state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+        if (state.isConstantHeatSource) {
+            state.temperatures[state.heatSource] = MAX_TEMP;
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            }
         }
 
         Grid gridTemp(state.cells);
@@ -90,14 +107,16 @@ void LocalEngine::stepFoward() {
 
         //update heatSource back it its oringinal temperature
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        state.temperatures[state.heatSource] = MAX_TEMP;
-        for (int d = 0; d < 9; ++d) {
-            state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-            state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-        }
+        if (state.isConstantHeatSource) {
+            state.temperatures[state.heatSource] = MAX_TEMP;
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            }
 
-        if (state.temperatures[state.heatSource] > current_max) {
-            current_max = state.temperatures[state.heatSource];
+            if (state.temperatures[state.heatSource] > current_max) {
+                current_max = state.temperatures[state.heatSource];
+            }
         }
 
         state.current_step++;
@@ -106,6 +125,7 @@ void LocalEngine::stepFoward() {
         history.min_temp_history.push_back(current_min);
         history.temperature_history.push_back(state.temperatures);
 
+        // Auto play check
         if (this->getAutoPlayStatus()) {
             this->stepFoward();
         }
@@ -276,8 +296,11 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     in.read(reinterpret_cast<char*>(&w), sizeof(w));
     in.read(reinterpret_cast<char*>(&h), sizeof(h));
 
+    bool constantHeat;
+    in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
+
     // Create Engine
-    auto loadedEngine = std::make_unique<LocalEngine>(w, h);
+    auto loadedEngine = std::make_unique<LocalEngine>(w, h, constantHeat);
     auto state = loadedEngine->getMutableState();
 
     // Get history length
@@ -333,6 +356,9 @@ bool saveSimulation(const SimulationState& state, const SimulationHistory& histo
     // Write width and height
     out.write(reinterpret_cast<const char*>(&state.width), sizeof(state.width));
     out.write(reinterpret_cast<const char*>(&state.height), sizeof(state.height));
+
+    // Write whether the heat is constant
+    out.write(reinterpret_cast<const char*>(&state.isConstantHeatSource), sizeof(state.isConstantHeatSource));
 
     // Write history length
     size_t history_count = history.time_history.size();

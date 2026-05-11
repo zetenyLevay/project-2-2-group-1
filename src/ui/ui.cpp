@@ -17,11 +17,11 @@
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
-std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
+std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSource) {
 
     switch (currentSource) {
         case DataSource::LOCAL:
-            return std::make_unique<LocalEngine>(w, h);
+            return std::make_unique<LocalEngine>(w, h, constantHeatSource);
         default:
             std::cerr << "Unknown data source" << std::endl;
             return nullptr;
@@ -35,7 +35,7 @@ int defaultHeight = 500;
 void startGui(DataSource source) {
     currentSource = source;
 
-    engine = createEngine(defaultWidth, defaultHeight);
+    engine = createEngine(defaultWidth, defaultHeight, true);
 
     launchGui();
 }
@@ -71,7 +71,7 @@ void launchGui() {
     double last_physics_tick = glfwGetTime();
     double physics_tick_rate = 0.01; // Run 1 physics step every 0.5 seconds
 
-    //SimulationHistory& history = engine->history;
+    //SimulationHistory& history = engine->history; DO NOT UNCOMMENT, IT HAS NO EFFECT ON PERFORMANCE (from what I can tell) 
 
     // The main loop
     while(!glfwWindowShouldClose(window)) { 
@@ -82,7 +82,8 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         std::shared_ptr<const SimulationState> statePtr = engine->getState();
         const SimulationState& state = *statePtr;
-        SimulationHistory& history = engine->history;
+
+        SimulationHistory& history = engine->history; // DO NOT DELETE, WHEN YOU DO IT BREAKS THE CREATE BUTTON
         
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -135,8 +136,17 @@ void launchGui() {
         // Gui elements go down below
         
         // --- Simulation window ---
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::Begin("Simulation");
+        ImGui::PopStyleVar();
 
+        static bool background = false;
+
+        // Get rid of weird borders
+        ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0.0f, 0.0f));
+
+        // Change room color
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.0f/255.0f, 0.0f/255.0f, 0.0f/255.0f, 1.0f));
         // We use -1.0f to make the plot fill the entire available window space
         if (ImPlot::BeginPlot("##HeatmapCanvas", ImVec2(-1.0f, -1.0f), ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
             
@@ -146,11 +156,24 @@ void launchGui() {
             // Force the plot to match the exact dimensions of the grid
             ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
 
-            // Change the colors 
-            // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
-            // ImPlotColormap_Hot goes from Black (Cold) to White/Yellow (Hot)
-            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            /*
+            USED FOR TRANSPARENCY, DONT DELETE MIGHT USE LATER
+            // Create new colormap, take each color from the Jet color map and change the opacity to 50%
+            static ImPlotColormap transparentJet = -1;
+            if (transparentJet == -1) {
+                ImVec4 custom_colors[128];
+                for (int i = 0; i < 128; ++i) {
+                    float ratio = float(i) / 127.0f;
+                    custom_colors[i] = ImPlot::SampleColormap((float)i / 127.0f, ImPlotColormap_Jet);
+                    custom_colors[i].w = ratio * 0.85f;
+                }
+                transparentJet = ImPlot::AddColormap("Jet_Transparent", custom_colors, 128);
+            }
+            */
 
+            // Apply the new color map
+            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
@@ -159,10 +182,60 @@ void launchGui() {
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
-            ImPlot::PopColormap();
+            
+            // Drawing the Background/Room
+            ImDrawList* drawList = ImPlot::GetPlotDrawList();
+            ImU32 lineColor = IM_COL32(0, 0, 0, 255);
+            float lineWidth = 2.0f;
 
+            // Radiator 
+            double radWidth = state.width * 0.07;
+            double radHeight = state.height * 0.4;
+            double radX = 1;
+            double radY = 0;
+            double valveR = radWidth / 8;
+            double valveX = radX + (radWidth / 2);
+            double valveY = radY + radHeight - (2 * valveR) - 1;
+            ImVec2 radTopLeft = ImPlot::PlotToPixels(radX, radY + radHeight);
+            ImVec2 radBottomRight = ImPlot::PlotToPixels(radX + radWidth, radY);
+            ImVec2 valveCenter = ImPlot::PlotToPixels(valveX, valveY);
+            ImVec2 valveEdge = ImPlot::PlotToPixels(valveX + valveR, valveY);
+            float valveRPixels = std::abs(valveEdge.x - valveCenter.x);
+
+            // Window   
+            double winWidth = state.width * 0.3;
+            double winHeight = state.height * 0.3;
+            double winX = state.width * 0.55;
+            double winY = state.width * 0.5;
+            double grill1X = winX + (winWidth / 2);
+            ImVec2 winTopLeft = ImPlot::PlotToPixels(winX, winY + winHeight);
+            ImVec2 winBottomRight = ImPlot::PlotToPixels(winX + winWidth, winY);
+            ImVec2 grill1Top = ImPlot::PlotToPixels(grill1X, winY + winHeight);
+            ImVec2 grillBottom = ImPlot::PlotToPixels(grill1X, winY);
+            ImVec2 grillLeft = ImPlot::PlotToPixels(winX, (winHeight / 2) + winY);
+            ImVec2 grillRight = ImPlot::PlotToPixels(winX + winWidth, (winHeight / 2) + winY);
+
+            if (background) {
+                // Main Body
+                drawList->AddRect(radTopLeft, radBottomRight, lineColor, 5.0f, 0, lineWidth);
+                
+                // Valve
+                drawList->AddCircle(valveCenter, valveRPixels, lineColor, 0, lineWidth);
+
+                // Main Pane
+                drawList->AddRect(winTopLeft, winBottomRight, lineColor, 5.0f, 0, lineWidth);
+
+                // Grills
+                drawList->AddLine(grill1Top, grillBottom, lineColor, lineWidth);
+                drawList->AddLine(grillLeft, grillRight, lineColor, lineWidth);
+            }
+
+            ImPlot::PopColormap();
             ImPlot::EndPlot();
         }        
+        ImPlot::PopStyleColor();
+        ImPlot::PopStyleVar();
+
         ImGui::End();
 
         // --- Simulation controls ---
@@ -195,6 +268,7 @@ void launchGui() {
         static int w = defaultWidth; // Default values
         static int h = defaultHeight;
         static int temperature = MAX_TEMP;
+        static bool constantHeat = true;
         float windowWidth = ImGui::GetContentRegionAvail().x;
         float inputWidth = (0.2f * windowWidth);
         float tempWidth = (0.25f * windowWidth);
@@ -230,14 +304,19 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &temperature);
             ImGui::PopItemWidth();
 
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &constantHeat);
+
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                // Kill the compute thread.
+                // Kill the compute thread
                 engine->thread->terminate();
 
                 // Create and display the new sim
-                engine = std::move(createEngine(w, h));
-                //history = engine->history;
+                engine = std::move(createEngine(w, h, constantHeat));
+                //history = engine->history; DO NOT UNCOMMENT
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
@@ -246,7 +325,7 @@ void launchGui() {
         }
 
         static bool save = false;
-        static char filenameBuffer[256] = "sim_01";
+        static char filenameBuffer[256] = "sim";
         std::string folder = "../saves/";
         std::string path = folder + std::string(filenameBuffer) + ".dat";
         static int selected = 0;
@@ -284,7 +363,10 @@ void launchGui() {
         }
 
         if (ImGui::Button("Load Simulation")) {
-            auto f = pfd::open_file("Choose a save", "", {"Data FIles (.dat)", "*.dat", "All Files", "*"});
+            // Get absolute path of the saves folder
+            std::string saveDirectory = std::filesystem::absolute(folder).string();
+
+            auto f = pfd::open_file("Choose a save", saveDirectory, {"Data FIles (.dat)", "*.dat", "All Files", "*"});
             
             if (!f.result().empty()) {
                 std::string selectedPath = f.result()[0];
@@ -295,7 +377,11 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
-                            //history = engine->history;
+                            //history = engine->history; DO NOT UNCOMMENT
+
+                            MAX_TEMP = engine->history.max_temp_history.front();
+                            scaleMax = MAX_TEMP * 1.1;
+
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                         }
                 }
@@ -316,6 +402,7 @@ void launchGui() {
             static int batchW = defaultWidth; // Default values
             static int batchH = defaultHeight;
             static int batchTemperature = MAX_TEMP;
+            static bool batchConstantHeat = true;
             static int NumberOfSims = 1;
             static int batchSelected = 0;
 
@@ -341,6 +428,12 @@ void launchGui() {
             ImGui::InputInt("##Temperature", &batchTemperature);
             ImGui::PopItemWidth();
 
+            // Get constant heat
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Constant Heat:");
+            ImGui::SameLine();
+            ImGui::Checkbox("##ConstantHeat", &batchConstantHeat);
+
             // Simulation Input
             ImGui::AlignTextToFramePadding();
             ImGui::Text("# of Simulations:");
@@ -359,8 +452,21 @@ void launchGui() {
             // Run Sims 
             if (ImGui::Button("Run Batch Simulations")) {
                 std::string filename(filenameBuffer);
-                std::thread batchThread = runSimulations(batchW, batchH, NumberOfSims, filename);
+                std::thread batchThread = runSimulations(batchW, batchH, batchTemperature, batchConstantHeat, NumberOfSims, filename);
                 batchThread.detach();
+                batch = false;
+            }
+        }
+
+        ImGui::SeparatorText("Simulation Display");
+        if (background) {
+            if (ImGui::Button("Turn off Room")) {
+                background = false;
+            }
+        }
+        else {
+            if (ImGui::Button("Show Room")) {
+                background = true;
             }
         }
 
@@ -370,8 +476,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = history.max_temp_history.back();
-        double coldSpot = history.min_temp_history.back();
+        double hotSpot = history.max_temp_history[state.current_step];
+        double coldSpot = history.min_temp_history[state.current_step];
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
