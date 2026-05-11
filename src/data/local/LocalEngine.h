@@ -19,7 +19,7 @@ public:
     // Physics functions
     void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-    void Stream(Grid &gridOld, Grid &gridNew);
+    void Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad);
 };
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);

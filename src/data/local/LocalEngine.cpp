@@ -31,6 +31,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     int radY = 0;
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
+
             initialState->heatSources.push_back(getIndex(x,y));
         }
     }
@@ -42,10 +43,12 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->TempAvg = 0.0;
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, ROOM_TEMP);
+    initialState->isRad.resize(cells, false);
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
         initialState->temperatures[idx] = MAX_TEMP;
+        initialState->isRad[idx] = true;
     }
 
     // Initialize Grid 
@@ -99,7 +102,7 @@ void LocalEngine::stepFoward() {
         Grid gridTemp(state.cells);
         this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
 
-        this->Stream(gridTemp, state.grid);
+        this->Stream(gridTemp, state.grid, state.isRad);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
@@ -246,11 +249,13 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad) {
     for(int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             // Current cell 1D index
             int currentIndex = getIndex(x, y);
+            
+            if (isRad[currentIndex]) continue;
 
             // Streaming each direction
             // In SoA the main idea is to write
@@ -259,16 +264,26 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
             for (int d = 0; d < 9; ++d) {
                 int sourceX = x - cx[d];
                 int sourceY = y - cy[d];
+                int oppositeDir = inv[d];
 
                 // check if the next x and y are in bound
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height) {
                     int sourceIndex = getIndex(sourceX, sourceY);
-                    gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
-                    gridNew.f[d][currentIndex] = gridOld.f[d][sourceIndex];
+
+                    if (isRad[sourceIndex]) {
+                        // It hit the radiator
+                        gridNew.f[d][currentIndex] = gridOld.f[oppositeDir][currentIndex];
+                        gridNew.g[d][currentIndex] = weights[d] * MAX_TEMP;
+                    }
+                    else {
+                        // Normal flow
+                        gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
+                        gridNew.f[d][currentIndex] = gridOld.f[d][sourceIndex];
+                    }
                 }
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
-                    int oppositeDir = inv[d];
+                    
                     gridNew.g[d][currentIndex] = gridOld.g[oppositeDir][currentIndex];
                     gridNew.f[d][currentIndex] = gridOld.f[oppositeDir][currentIndex];
                 }

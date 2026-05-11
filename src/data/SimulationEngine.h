@@ -15,6 +15,7 @@ struct SimulationState {
     int heatSourceW;
     int heatSourceH;
     std::vector<int> heatSources; 
+    std::vector<bool> isRad;
     bool isConstantHeatSource;
     
     // Make grid default size 0.
