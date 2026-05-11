@@ -23,9 +23,6 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
     initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
-    //placeholder values as this would have to be calculated from real values and turned into lattice units
-    initialState->heat_spread = 0.1;
-    initialState->viscosity = 0.1;
     //relaxation times for heat_spread and visocsity
     //we are using 3 because we divide by cs2 which is 1/3
     initialState->tauF = initialState->viscosity*3 +0.5;
@@ -34,7 +31,6 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
-    initialState->temperatures[initialState->heatSource] = MAX_TEMP; //give the chosen temeprature to the heat source
 
     // Initialize Grid 
     for (int i = 0; i < cells; i++) {
