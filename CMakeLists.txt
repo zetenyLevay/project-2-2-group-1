@@ -52,8 +52,11 @@ find_package(Threads REQUIRED) # For WebSocket and batch threading
 
 # GUI dependencies (OpenGL, GLFW)
 if(BUILD_GUI)
+    message(STATUS "BUILD_GUI=ON — looking for OpenGL")
     find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration
     add_subdirectory(vendor/glfw-3.4)
+else()
+    message(STATUS "BUILD_GUI=OFF — skipping OpenGL/GLFW dependencies")
 endif()
 
 include(FetchContent)

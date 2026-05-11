@@ -292,7 +292,7 @@ void LidDrivenCavity::runUntilConvergence(double tolerance, int maxSteps, int mi
         int synced = 0;
         while (state->current_step <= step) {
             state = getState();
-		std::this_thread::yield() // CPU can be used for other things
+		std::this_thread::yield(); // CPU can be used for other things
             if (++synced > 1000000) break;
         }
 
