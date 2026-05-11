@@ -13,13 +13,13 @@
 // Main Writer: Zétény
 // Physics constants
 // lb stands for lattice boltzmann unit
-const double MAX_TEMP = 80.0;
+inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
-const double room_height = 4.0; // in meters
-const double cells_height = 300; // cells of 1d
+const double room_height = 2.5; // in meters
+const double cells_height = 500; // cells of 1d
 const double delta_T = MAX_TEMP-ROOM_TEMP;
 const double mach_number = 0.1; // for stability
-const double rayliegh_num = 1e5;
+const double rayliegh_num = 1e6;
 const double prandtl_num = 0.71; // prandtl number of air
 const double cs = 1/sqrt(3); // lattice speed of sound
 const double cs2 = 1.0/3; // lattice speed of sound squared

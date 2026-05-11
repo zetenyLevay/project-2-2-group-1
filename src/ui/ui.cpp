@@ -29,8 +29,8 @@ std::unique_ptr<SimulationEngine> createEngine(int w = 51, int h = 51) {
 
 }
 
-int defaultWidth = 51;
-int defaultHeight = 51;
+int defaultWidth = 500;
+int defaultHeight = 500;
 
 void startGui(DataSource source) {
     currentSource = source;
@@ -462,6 +462,9 @@ void launchGui() {
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
+        ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
+        ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
+
 
         ImGui::End();
 

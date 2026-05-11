@@ -62,7 +62,7 @@ void LocalEngine::stepFoward() {
         state.temperatures[state.heatSource] = MAX_TEMP;
         for (int d = 0; d < 9; ++d) {
             state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-            state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            //state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
         }
 
         Grid gridTemp(state.cells);
@@ -180,7 +180,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             }
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = lattice_buoyancy *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
+            double buoyancy = -lattice_buoyancy *(temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
@@ -194,12 +194,12 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2) - (uyF * buoyancy) / cs2);
+                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
                 //The complete Lattice Boltzmann Fluid movement formula
                 gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/density_relaxation_time) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
                 //The complete Lattice boltzmann Thermal formula
                 double cuT=cx[d]*ux + cy[d]*uyF;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/thermal_relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2) + (cuT*cuT)/(2*cs2*cs2) - (ux*ux + uyF*uyF)/(2*cs2));
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/thermal_relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
                 
             }
         }
