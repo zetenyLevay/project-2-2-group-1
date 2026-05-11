@@ -115,6 +115,7 @@ endif()
 include_directories(
     src/main
     src/data
+    src/data/cavity
     src/thread
 )
 
@@ -138,6 +139,9 @@ add_library(simulation_logic
 
     src/data/local/LocalEngine.cpp
     src/data/local/LocalEngine.h
+
+    src/data/cavity/LidDrivenCavity.cpp
+    src/data/cavity/LidDrivenCavity.h
 
     src/thread/ReusableThread.cpp
     src/thread/ReusableThread.h
