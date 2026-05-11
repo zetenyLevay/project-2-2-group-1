@@ -12,7 +12,9 @@ struct SimulationState {
     int width, height, cells;
     Grid grid;
     std::vector<double> temperatures;
-    double heatSource;
+    int heatSourceW;
+    int heatSourceH;
+    std::vector<int> heatSources; 
     bool isConstantHeatSource;
     
     // Make grid default size 0.

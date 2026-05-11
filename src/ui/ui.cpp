@@ -29,9 +29,6 @@ std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSo
 
 }
 
-int defaultWidth = 500;
-int defaultHeight = 500;
-
 void startGui(DataSource source) {
     currentSource = source;
 
@@ -140,7 +137,7 @@ void launchGui() {
         ImGui::Begin("Simulation");
         ImGui::PopStyleVar();
 
-        static bool background = false;
+        static bool background = true;
 
         // Get rid of weird borders
         ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0.0f, 0.0f));
@@ -189,8 +186,8 @@ void launchGui() {
             float lineWidth = 2.0f;
 
             // Radiator 
-            double radWidth = state.width * 0.07;
-            double radHeight = state.height * 0.4;
+            int radWidth = state.width * 0.1;
+            int radHeight = state.height * 0.4;
             double radX = 1;
             double radY = 0;
             double valveR = radWidth / 8;
@@ -217,7 +214,7 @@ void launchGui() {
 
             if (background) {
                 // Main Body
-                drawList->AddRect(radTopLeft, radBottomRight, lineColor, 5.0f, 0, lineWidth);
+                drawList->AddRect(radTopLeft, radBottomRight, lineColor, 0.0f, 0, lineWidth);
                 
                 // Valve
                 drawList->AddCircle(valveCenter, valveRPixels, lineColor, 0, lineWidth);

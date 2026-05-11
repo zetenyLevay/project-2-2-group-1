@@ -9,6 +9,9 @@
 #include <array>
 #include <cmath>
 
+// Default Width and Height
+inline int defaultWidth = 100;
+inline int defaultHeight = 100;
 
 // Main Writer: Zétény
 // Physics constants
@@ -16,7 +19,7 @@
 inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
 const double room_height = 2.5; // in meters
-const double cells_height = 500; // cells of 1d
+const double cells_height = (double)defaultHeight; // cells of 1d
 const double delta_T = MAX_TEMP-ROOM_TEMP;
 const double mach_number = 0.1; // for stability
 const double rayliegh_num = 1e6;

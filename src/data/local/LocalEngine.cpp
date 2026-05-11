@@ -22,15 +22,31 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->heat_spread = thermal_relaxation_time;
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
-    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
+    initialState->heatSourceW = width * 0.1;
+    initialState->heatSourceH = height * 0.4;
+    
+    // Set heatsources
+    // (x,y) = (1,0); the radiator's position
+    int radX = 1;
+    int radY = 0;
+    for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
+        for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
+            initialState->heatSources.push_back(getIndex(x,y));
+        }
+    }
+
     //relaxation times for heat_spread and visocsity
     //we are using 3 because we divide by cs2 which is 1/3
     initialState->tauF = initialState->viscosity*3 +0.5;
     initialState->tauT = initialState->heat_spread*3  +0.5;
     initialState->TempAvg = 0.0;
-    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
     initialState->isConstantHeatSource = constantHeatSource;
-    initialState->temperatures.resize(cells, 20.0); // room temp assumption
+    initialState->temperatures.resize(cells, ROOM_TEMP);
+
+    // Set heatsource for frame 0
+    for (int idx : initialState->heatSources) {
+        initialState->temperatures[idx] = MAX_TEMP;
+    }
 
     // Initialize Grid 
     for (int i = 0; i < cells; i++) {
@@ -71,10 +87,12 @@ void LocalEngine::stepFoward() {
 
         // update heatSource back it its oringinal temperature
         if (state.isConstantHeatSource) {
-            state.temperatures[state.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            for (int idx : state.heatSources) {
+                state.temperatures[idx] = MAX_TEMP;
+                for (int d = 0; d < 9; ++d) {
+                    state.grid.g[d][idx] = weights[d] * state.temperatures[idx];
+                    state.grid.f[d][idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                }
             }
         }
 
@@ -104,15 +122,18 @@ void LocalEngine::stepFoward() {
         //update heatSource back it its oringinal temperature
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
         if (state.isConstantHeatSource) {
-            state.temperatures[state.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-            }
+            for (int idx : state.heatSources) {
+                state.temperatures[idx] = MAX_TEMP;
+                for (int d = 0; d < 9; ++d) {
+                    state.grid.g[d][idx] = weights[d] * state.temperatures[idx];
+                    state.grid.f[d][idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                }
 
-            if (state.temperatures[state.heatSource] > current_max) {
-                current_max = state.temperatures[state.heatSource];
+                if (state.temperatures[idx] > current_max) {
+                    current_max = state.temperatures[idx];
+                }
             }
+            
         }
 
         state.current_step++;
