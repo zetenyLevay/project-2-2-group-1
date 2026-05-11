@@ -17,7 +17,6 @@ inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
 
 #pragma omp declare target
-const double cs2= 1.0/3.0; //lattice constant speed of sound
 const double room_height = 2.5; // in meters
 const double cells_height = 500; // cells of 1d
 const double delta_T = MAX_TEMP-ROOM_TEMP;

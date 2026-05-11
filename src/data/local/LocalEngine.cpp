@@ -82,8 +82,8 @@ void LocalEngine::stepFoward() {
         if (state.isConstantHeatSource) {
             state.temperatures[state.heatSource] = MAX_TEMP;
             for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                state.grid.g[d * cells + state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d * cells + state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
         }
 
@@ -96,7 +96,9 @@ void LocalEngine::stepFoward() {
         double current_min = MAX_TEMP;
         double tempAvgLocal = 0.0;
         #ifdef _OPENMP
-        #pragma omp parallel for reduction(+:tempAvgLocal) reduction(max:current_max) reduction(min:current_min)
+        #pragma omp parallel for reduction(+:tempAvgLocal) \
+            reduction(max:current_max) \
+            reduction(min:current_min)
         #endif
         for (int i = 0; i < cells; i++) {
             double temp = 0.0;
@@ -117,9 +119,10 @@ void LocalEngine::stepFoward() {
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
         if (state.isConstantHeatSource) {
             state.temperatures[state.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            for (int d = 0; d < 9; ++d)
+            {
+                state.grid.g[d* cells + state.heatSource]= weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d* cells + state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
 
             if (state.temperatures[state.heatSource] > current_max) {
