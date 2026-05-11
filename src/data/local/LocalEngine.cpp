@@ -13,7 +13,7 @@
 // Main Writer: Berke/Kristian 
 // Reviewer: 
 // Contributers: 
-LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height) {
+LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : SimulationEngine(width, height) {
     auto initialState = std::make_shared<SimulationState>();
 
     initialState->width = width;
@@ -24,11 +24,18 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
     initialState->grid = initialState->cells;
 
     initialState->current_step = 0;
-    initialState->heat_spread = 0.8;
-    initialState->viscosity = 0.6;
+    initialState->heat_spread = thermal_relaxation_time;
+    initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
+    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
+    //relaxation times for heat_spread and visocsity
+    //we are using 3 because we divide by cs2 which is 1/3
+    initialState->tauF = initialState->viscosity*3 +0.5;
+    initialState->tauT = initialState->heat_spread*3  +0.5;
+    initialState->TempAvg = 0.0;
+    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
+    initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
-    initialState->temperatures[getIndex(0,0)] = MAX_TEMP; // Set heat source 
 
     // Initialize Grid
     double tempAvgLocal = 0.0;
@@ -43,13 +50,11 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
         tempAvgLocal = tempAvgLocal + initialState->temperatures[i];
     }
     initialState->TempAvg = tempAvgLocal;
-    initialState->TempAvg = initialState->TempAvg/cells;
 
-    initialState->time_history.push_back(initialState->current_step);
-    initialState->max_temp_history.push_back(MAX_TEMP);
-    initialState->min_temp_history.push_back(ROOM_TEMP);
-    initialState->temperature_history.push_back(initialState->temperatures);
-    initialState->grid_history.push_back(initialState->grid);
+    history.time_history.push_back(initialState->current_step);
+    history.max_temp_history.push_back(MAX_TEMP);
+    history.min_temp_history.push_back(ROOM_TEMP);
+    history.temperature_history.push_back(initialState->temperatures);
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(initialState);
@@ -58,28 +63,32 @@ LocalEngine::LocalEngine(int width, int height) : SimulationEngine(width, height
 // Main Writer: Gecenio 
 // Reviewer: 
 // Contributers: Kristian, Berke
-// Mutates: grid, temperatures, current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history
 void LocalEngine::stepFoward() {
     thread->submitTask([this](SimulationState& state) {
         // If already calculated just set the grid and temperatures again 
-        if (state.current_step < state.temperature_history.size() - 1) {
+        if (state.current_step < history.temperature_history.size() - 1) {
             state.current_step++;
-            state.temperatures = state.temperature_history[state.current_step];
+            state.temperatures = history.temperature_history[state.current_step];
 
-            // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-            if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-                state.grid = state.grid_history[state.current_step];
+            // Auto play check
+            if (this->getAutoPlayStatus()) {
+                this->stepFoward();
             }
+
             return;
         }
 
-        if (state.grid_history.empty()) {
-            std::cout << "You have loaded a 'Necessary' save, you cannot compute new frames" << std::endl;
-            return;
+        // update heatSource back it its oringinal temperature
+        if (state.isConstantHeatSource) {
+            state.temperatures[state.heatSource] = MAX_TEMP;
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            }
         }
 
         Grid gridTemp(state.cells);
-        this->Collision(state.heat_spread,state.TempAvg,state.viscosity, gridTemp, state.grid);
+        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
 
         this->Stream(gridTemp, state.grid);
 
@@ -104,22 +113,36 @@ void LocalEngine::stepFoward() {
         }
         state.TempAvg = tempAvgLocal / cells;
 
+        //update heatSource back it its oringinal temperature
+        //doing it twice to ensure that the temperature reamins consitent and there is no flow
+        if (state.isConstantHeatSource) {
+            state.temperatures[state.heatSource] = MAX_TEMP;
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
+                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            }
+
+            if (state.temperatures[state.heatSource] > current_max) {
+                current_max = state.temperatures[state.heatSource];
+            }
+        }
 
         state.current_step++;
-        state.time_history.push_back(state.current_step);
-        state.max_temp_history.push_back(current_max);
-        state.min_temp_history.push_back(current_min);
-        state.temperature_history.push_back(state.temperatures);
+        history.time_history.push_back(state.current_step);
+        history.max_temp_history.push_back(current_max);
+        history.min_temp_history.push_back(current_min);
+        history.temperature_history.push_back(state.temperatures);
 
-        // Save grid state
-        state.grid_history.push_back(state.grid);
+        // Auto play check
+        if (this->getAutoPlayStatus()) {
+            this->stepFoward();
+        }
     });
 }
 
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers:
-// Mutates: current_step, time_history, max_temp_history, min_temp_history, temperature_history, grid_history, temperatures, grid
 void LocalEngine::stepBack() {
     thread->submitTask([this](SimulationState& state) {
         // Prevent going back beyond initial state
@@ -128,31 +151,27 @@ void LocalEngine::stepBack() {
         // Decrement the current step
         state.current_step--;
 
-        state.temperatures = state.temperature_history[state.current_step];
-
-        // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-            state.grid = state.grid_history[state.current_step];
-        }
+        state.temperatures = history.temperature_history[state.current_step];
     });
 }
 
+// Main Writer: Kristian
+// Reviewer:
+// Contributers:
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
     thread->submitTask([this, step](SimulationState& state) {
         // Prevent going out of bounds
-        if (step < 0 || step >= state.temperature_history.size()) return;
+        if (step < 0 || step >= history.temperature_history.size()) return;
 
         state.current_step = step;
-        state.temperatures = state.temperature_history[state.current_step];
-
-         // Only pull from grid_history if it exists (Necessary loads dont have grid history)
-        if (!state.grid_history.empty() && state.current_step < state.grid_history.size()) {
-            state.grid = state.grid_history[state.current_step];
-        }
+        state.temperatures = history.temperature_history[state.current_step];
     });
 }
 
+// Main Writer: Gecenio
+// Reviewer:
+// Contributers:
 double LocalEngine::getTotalEnergy() const {
     // Can't really make this run on a seperate thread without changing the function signature.
     auto state = thread->getState();
@@ -205,7 +224,7 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
 
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
+            double buoyancy = -lattice_buoyancy *(temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
@@ -218,11 +237,11 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
-                double forceTerm=weights[d] *(1.0- 0.5/viscosity)*((cy[d] * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
-                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/viscosity) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
+                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/density_relaxation_time) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
 
                 double cuT=cx[d]*ux + cy[d]*uy;
-                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/heat_spread) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
+                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/thermal_relaxation_time) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
             }
         }
     }
@@ -316,17 +335,16 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         return nullptr;
     }
 
-    // Savetype
-    SaveType saveType;
-    in.read(reinterpret_cast<char*>(&saveType), sizeof(saveType));
-
     // Width and Height
     int w, h;
     in.read(reinterpret_cast<char*>(&w), sizeof(w));
     in.read(reinterpret_cast<char*>(&h), sizeof(h));
 
+    bool constantHeat;
+    in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
+
     // Create Engine
-    auto loadedEngine = std::make_unique<LocalEngine>(w, h);
+    auto loadedEngine = std::make_unique<LocalEngine>(w, h, constantHeat);
     auto state = loadedEngine->getMutableState();
 
     // Get history length
@@ -334,45 +352,30 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
 
     // Read basic history information
-    state->time_history.resize(history_count);
-    state->max_temp_history.resize(history_count);
-    state->min_temp_history.resize(history_count);
+    loadedEngine->history.time_history.resize(history_count);
+    loadedEngine->history.max_temp_history.resize(history_count);
+    loadedEngine->history.min_temp_history.resize(history_count);
 
-    in.read(reinterpret_cast<char*>(state->time_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(state->max_temp_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(state->min_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(loadedEngine->history.time_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(loadedEngine->history.max_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(loadedEngine->history.min_temp_history.data()), history_count * sizeof(double));
 
     // Get full temperature history
-    state->temperature_history.resize(history_count, std::vector<double>(state->cells));
+    loadedEngine->history.temperature_history.resize(history_count, std::vector<double>(state->cells));
     for (size_t i = 0; i < history_count; ++i) {
-        in.read(reinterpret_cast<char*>(state->temperature_history[i].data()), state->cells * sizeof(double));
+        in.read(reinterpret_cast<char*>(loadedEngine->history.temperature_history[i].data()), state->cells * sizeof(double));
     }
 
-    // Clear the grid history because the engine constructer adds an initial state
-    state->grid_history.clear();
 
-    if (saveType == SaveType::COMPLETE) {
-        state->grid_history.reserve(history_count);
-
-        // Get full grid history
-        for (size_t i = 0; i < history_count; ++i) {
-            Grid tempGrid(state->cells);
-
-        for (int d = 0; d < 9; ++d) {
-            in.read(reinterpret_cast<char*>(tempGrid.g.data() + d * state->cells), state->cells * sizeof(double));
-        }
-        state->grid_history.push_back(tempGrid);
+    // Write most recent grid
+    for (int d = 0; d < 9; ++d) {
+        in.read(reinterpret_cast<char*>(state->grid.g.data() + d * state->cells), state->cells * sizeof(double));
     }
-    }
-    
+
     // Go to the last frame of the sim
     if (history_count > 0) {
-        state->current_step = state->time_history.back();
-        state->temperatures = state->temperature_history.back();
-
-        if (saveType == SaveType::COMPLETE) {
-            state->grid = state->grid_history.back();
-        }
+        state->current_step = loadedEngine->history.time_history.back();
+        state->temperatures = loadedEngine->history.temperature_history.back();
     }
 
     in.close();
@@ -382,7 +385,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers: 
-bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType) {
+bool saveSimulation(const SimulationState& state, const SimulationHistory& history, const std::string& filepath) {
     std::filesystem::path pathObj(filepath);
     std::filesystem::path dir = pathObj.parent_path();
 
@@ -394,34 +397,30 @@ bool saveSimulation(const SimulationState state, const std::string& filepath, co
     std::ofstream out(filepath, std::ios::binary);
     if (!out.is_open()) return false;
 
-    // Write the type of save
-    out.write(reinterpret_cast<const char*>(&saveType), sizeof(saveType));
-
     // Write width and height
     out.write(reinterpret_cast<const char*>(&state.width), sizeof(state.width));
     out.write(reinterpret_cast<const char*>(&state.height), sizeof(state.height));
 
+    // Write whether the heat is constant
+    out.write(reinterpret_cast<const char*>(&state.isConstantHeatSource), sizeof(state.isConstantHeatSource));
+
     // Write history length
-    size_t history_count = state.time_history.size();
+    size_t history_count = history.time_history.size();
     out.write(reinterpret_cast<const char*>(&history_count), sizeof(history_count));
 
     // Write basic history information
-    out.write(reinterpret_cast<const char*>(state.time_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(state.max_temp_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(state.min_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history.time_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history.max_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history.min_temp_history.data()), history_count * sizeof(double));
 
     // Write temperature history
     for (size_t i = 0; i < history_count; ++i) {
-        out.write(reinterpret_cast<const char*>(state.temperature_history[i].data()), state.cells * sizeof(double));
+        out.write(reinterpret_cast<const char*>(history.temperature_history[i].data()), state.cells * sizeof(double));
     }
 
-    if (saveType == SaveType::COMPLETE) {
-        // Write grid history
-        for (size_t i = 0; i < history_count; ++i) {
-            for (int d = 0; d < 9; ++d) {
-                out.write(reinterpret_cast<const char*>(state.grid_history[i].g.data() + d * state.cells), state.cells * sizeof(double));
-            }
-        }
+    // Get most recent grid
+    for (int d = 0; d < 9; ++d) {
+        out.write(reinterpret_cast<const char*>(state.grid.g.data()+ d * state.cells), state.cells * sizeof(double));
     }
 
     out.close();

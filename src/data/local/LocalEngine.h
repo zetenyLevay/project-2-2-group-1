@@ -25,7 +25,7 @@ inline std::array<double, 3> computeDensityAndVelocity(const double* f, int cell
 
 class LocalEngine : public SimulationEngine {
 public:
-    LocalEngine(int w, int h);
+    LocalEngine(int w, int h, bool constantHeatSource);
 
     // Step foward one frame
     void stepFoward();
@@ -37,15 +37,10 @@ public:
     double getTotalEnergy() const;
 
     // Physics functions
-    void Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld);
+    void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
     void Stream(Grid &gridOld, Grid &gridNew);
 };
 
-enum SaveType {
-    NECESSARY,
-    COMPLETE
-};
-
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
-bool saveSimulation(const SimulationState state, const std::string& filepath, const SaveType saveType = SaveType::COMPLETE);
+bool saveSimulation(const SimulationState& state, const SimulationHistory& history, const std::string& filepath);

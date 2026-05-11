@@ -5,9 +5,13 @@
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+//
+/** Gets the next task in the queue to be executed. Sleeps the thread if none are currently available.
+It is meant to only be called from the ReusableThread, calling from main thread may lead to a deadlock. */
 Task TaskQueue::getNextTask() {
     std::unique_lock<std::mutex> lock(this->taskMutex);
 
+    // Sleep the thread until either we decide to stop or there is a task available.
     this->condition.wait(lock, [this] { 
         return (this->queue.size() != 0) || (this->stopping); 
     });
@@ -25,11 +29,13 @@ Task TaskQueue::getNextTask() {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+//
+/** Submits a task to be executed at a later point by the ReusableThread. Can be called from any thread. */
 void TaskQueue::submitTask(Task task) {
     this->taskMutex.lock();
 
     this->queue.push(task);
-    this->condition.notify_one();
+    this->condition.notify_one(); // Wake up a thread if one is sleeping. We have one thread right now so it doesn't matter whether we use notify_one or notify_all.
 
     this->taskMutex.unlock();
 }
@@ -37,23 +43,27 @@ void TaskQueue::submitTask(Task task) {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * Signals the TaskQueue to stop accepting new tasks. If the thread is waiting for a task, it will be woken up and returned a nullptr.
+ * Called when the thread is about to termiated. Can be called from any thread.
+ */
 void TaskQueue::stop() {
     this->stopping = true;
-    this->condition.notify_one();
+    this->condition.notify_all();
 }
 
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * Terminate the thread. It will signal the thread that it needs to stop, and when it is done executing any tasks (if any were ongoing), the ReusableThread will be joined with the calling thread.
+ * It can be called from any thread.
+ */
 void ReusableThread::terminate() {
     if (this->terminateNext == true) return;
 
     this->terminateNext = true;
     this->taskQueue.stop();
-
-    if (this->thread.get_id() == std::this_thread::get_id()) {
-        std::cerr << "uh oh, tried to terminate own thread, this is a deadlock!!!\n";
-    }
 
     this->thread.join();
 }
@@ -63,12 +73,15 @@ void ReusableThread::terminate() {
 // Contributers:
 ReusableThread::ReusableThread(SimulationStatePointer initialState) {
     this->currentStatePtr = initialState;
-    thread = std::thread(&ReusableThread::threadMain, this);
+    thread = std::thread(&ReusableThread::threadMain, this); // Launch the thread.
 }
 
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * Submit a task to be executed at a later point. Can be called from any thread.
+ */
 void ReusableThread::submitTask(Task task) {
     this->taskQueue.submitTask(task);
 }
@@ -76,6 +89,9 @@ void ReusableThread::submitTask(Task task) {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * Gets the current SimulationStatePointer. This is the preferred way of getting the state of the simulation. Can be called from any thread.
+ */
 SimulationStatePointer ReusableThread::getState() {
     SimulationStatePointer statePtr;
     this->stateMutex.lock();
@@ -87,6 +103,11 @@ SimulationStatePointer ReusableThread::getState() {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * Gets the current SimulationState pointer. The difference between this function and getState() is that this pointer is not defined as const.
+ * This method is unsafe and should not be used unless you are very sure there is nothing else that might modify the state.
+ * This is used by the file loading function to set up the initial state before any simulations are run.
+ */
 std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
     std::shared_ptr<SimulationState> statePtr = std::const_pointer_cast<SimulationState>(this->currentStatePtr);
 
@@ -96,6 +117,10 @@ std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
+/**
+ * This is the entry point for the compute thread.
+ * It consists of a loop that continually checks if a task is available, and if so executes it and modifies the current state according to the result.
+ */
 void ReusableThread::threadMain() {
     beginning:
 
@@ -113,11 +138,11 @@ void ReusableThread::threadMain() {
     currentStatePtr = nextState;
     stateMutex.unlock();
 
-    goto beginning;
+    goto beginning; // I prefer this to having the entire method indented in a while true loop.
 }
 
-// Main Writer: Berke
-// Reviewer: 
+// Main Writer: Kristian
+// Reviewer: Berke
 // Contributers:
 ReusableThread::~ReusableThread() {
     this->terminate();

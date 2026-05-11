@@ -7,16 +7,37 @@
 
 #include <vector>
 #include <array>
-
+#include <cmath>
 
 
 // Main Writer: Zétény
 // Physics constants
-const double MAX_TEMP = 100.0;
+// lb stands for lattice boltzmann unit
+inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
 
 #pragma omp declare target
 const double cs2= 1.0/3.0; //lattice constant speed of sound
+const double room_height = 2.5; // in meters
+const double cells_height = 500; // cells of 1d
+const double delta_T = MAX_TEMP-ROOM_TEMP;
+const double mach_number = 0.1; // for stability
+const double rayliegh_num = 1e6;
+const double prandtl_num = 0.71; // prandtl number of air
+const double cs = 1/sqrt(3); // lattice speed of sound
+const double cs2 = 1.0/3; // lattice speed of sound squared
+const double lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
+const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
+const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
+const double thermal_relaxation_time = 3*lattice_thermal_diffusivity+0.5;
+const double density_relaxation_time = 3*lattice_kinematic_viscosity+0.5;
+const double real_viscosity = 1.5e-5;// kinematic viscosity of air at 20c in real life (m2/s)
+const double delta_x = room_height/cells_height;
+const double seconds_per_step = lattice_kinematic_viscosity*((delta_x*delta_x)/real_viscosity);
+
+
+
+
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,-1,1};

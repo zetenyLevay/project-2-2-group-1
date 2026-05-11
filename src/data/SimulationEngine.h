@@ -12,24 +12,27 @@ struct SimulationState {
     int width, height, cells;
     Grid grid;
     std::vector<double> temperatures;
-
+    double heatSource;
+    bool isConstantHeatSource;
+    
     // Make grid default size 0.
     SimulationState(): grid(0) {}
 
     // State Checks
     int current_step;
     double heat_spread;
+    double tauT; //relaxation time temeprature
     double viscosity;
+    double tauF; //relaxation time fluid
     double TempAvg;
+};
 
+struct SimulationHistory {
     // Information for the stats
     std::vector<double> time_history;
     std::vector<double> max_temp_history;
     std::vector<double> min_temp_history;
     std::vector<std::vector<double>> temperature_history;
-
-    // State history of the grid, so we can rewind
-    std::vector<Grid> grid_history;
 };
 
 class SimulationEngine {
@@ -41,6 +44,8 @@ public:
     std::shared_ptr<const SimulationState> getState();
 
     std::shared_ptr<SimulationState> getMutableState();
+
+    SimulationHistory history;
 
     SimulationEngine(int w, int h);
 
@@ -54,6 +59,12 @@ public:
     virtual void stepBack() = 0;
 
     virtual void seekTo(int step) = 0;
+
+    bool getAutoPlayStatus();
+    void setAutoPlayStatus(bool status);
+
+    private:
+        bool autoPlay = false;
 };
 
 enum DataSource {

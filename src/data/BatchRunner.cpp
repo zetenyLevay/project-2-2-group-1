@@ -6,14 +6,19 @@
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers:
-std::thread runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType) {
+std::thread runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
             std::cout << "Starting Simulation " << i + 1 << " of " << NumberOfSims << std::endl;
-
-            LocalEngine engine(width, height);
+            
+            // Set temperature
+            MAX_TEMP = temperature;
+            
+            LocalEngine engine(width, height, constantHeatSource);
             bool isComplete = false; // The simulation is complete once the hot spot and cold spot are equal 
             int expectedStep = 0;
+
+            SimulationHistory& history = engine.history;
 
             while (!isComplete) {
                 engine.stepFoward();
@@ -27,8 +32,8 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
                     state = engine.getState();
                 }
 
-                double maxTemp = state->max_temp_history.back();
-                double minTemp = state->min_temp_history.back();
+                double maxTemp = history.max_temp_history.back();
+                double minTemp = history.min_temp_history.back();
 
                 // The effective equilibream, no need to check for until it is exactly equal
                 if (std::abs(maxTemp - minTemp) < 0.1) {
@@ -42,7 +47,7 @@ std::thread runSimulations(int width, int height, int NumberOfSims, const std::s
                     path += ".dat";
 
                     // Save the simulation
-                    if (saveSimulation(*state, path, saveType)) {
+                    if (saveSimulation(*state, history, path)) {
                         std::cout << "Saved to: " << path << std::endl;
                     }
                     else {

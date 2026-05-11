@@ -1,20 +1,45 @@
 #include "SimulationEngine.h"
+#include <stdexcept>
+
 
 SimulationEngine::SimulationEngine(int w, int h) : width(w), height(h), cells(w * h) {};
 
-std::shared_ptr<const SimulationState> SimulationEngine::getState() {
+bool SimulationEngine::getAutoPlayStatus() {
+    return this->autoPlay;
+}
+
+void SimulationEngine::setAutoPlayStatus(bool status) {
+    this->autoPlay = status;
+
+    if (status) {
+        this->stepFoward();
+    }
+}
+
+/**
+ * Gets the current state of the simulation.
+ */
+SimulationStatePointer SimulationEngine::getState() {
     return this->thread->getState();
 }
 
+/**
+ * Gets the current state of the simulation as a mutable pointer. This method is unsafe, use getState() whenever possible.
+ */
 std::shared_ptr<SimulationState> SimulationEngine::getMutableState() {
     return this->thread->getMutableState();
 }
 
 // Main Writer: Gecenio
 // Reviewer: 
-// Contributers: Berke 
+// Contributers: Cosmin
 const int SimulationEngine::getIndex(int x, int y) {
-    int wrappedX = (x + this->width) % this->width;
-    int wrappedY = (y + this->height) % this->height;
-    return wrappedY * this->width + wrappedX;
+    if(y>=0 && y<height)
+    {
+        if(x>=0 && x<width)
+        {
+            return y * this->width + x;
+        }
+    }
+    throw std::out_of_range("Index out of bounds");
 }

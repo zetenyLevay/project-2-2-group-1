@@ -42,30 +42,30 @@ void runWebSocketServer(LocalEngine& engine) {
 }
 
 // relaxation time for temperature spread
-const double heat_spread = 1.0;
+
 
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Kristian
 int main(int argc, char* argv[]) {
     if (argc >= 2 && std::string(argv[1]) == "--batch") {
-        // runSimulations(int width, int height, int NumberOfSims, const std::string& filename, SaveType saveType)
-        // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <NumberOfSims> <filename> <saveType>
+        // runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename)
+        // Command should be: .\project_2_2_group_1.exe --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>
 
-        if (argc < 7) {
-            std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <NumberOfSims> <filename> <saveType>" << std::endl;
+        if (argc < 8) {
+            std::cerr << "Too few arguements for batch simulation: \n" << argv[0] << " --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>" << std::endl;
             return 1;
         }
 
         int width = atoi(argv[2]);
         int height = atoi(argv[3]);
-        int NumberOfSims = atoi(argv[4]);
-        std::string filename = argv[5];
-        int selectedSave = atoi(argv[6]);
+        int temperature = atoi(argv[4]);
+        bool constantHeat = true;
+        if (std::string(argv[5]) == "false") { constantHeat = false; }
+        int NumberOfSims = atoi(argv[6]);
+        std::string filename = argv[7];
 
-        SaveType saveType = selectedSave == 0 ? SaveType::NECESSARY : SaveType::COMPLETE;
-
-        std::thread batchThread = runSimulations(width, height, NumberOfSims, filename, saveType);
+        std::thread batchThread = runSimulations(width, height, temperature, constantHeat, NumberOfSims, filename);
         batchThread.join(); // Keeps thread alive until it is finished
     }
     else if (argc >= 2 && std::string(argv[1]) == "--cavity") {

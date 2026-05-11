@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.14)
-project(project_2_2_group_1)
+project(project_2_2_group_1 LANGUAGES CXX)
+
+include(CheckLanguage)
+check_language(CUDA)
+
+if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+    add_compile_definitions(CUDA_AVAILABLE=1)
+endif()
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
 set(CMAKE_CXX_STANDARD 17)
@@ -193,8 +201,10 @@ endif()
 # Testing
 enable_testing()
 add_executable(test_stream tests/test_stream.cpp)
+# The test only links the math and network, skipping the heavy UI stuff
 target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads)
 
+# Windows-specific networking libraries for tests
 if(WIN32)
     target_link_libraries(test_stream ws2_32 wsock32)
 endif()
@@ -209,4 +219,21 @@ endif()
 
 if(WIN32)
     target_link_libraries(benchmark_lbm ws2_32 wsock32)
+endif()
+
+
+
+if(CMAKE_CUDA_COMPILER)
+    add_executable(CollisionTest
+        src/CUDA/CollisionTest.cpp
+        src/CUDA/CollisionCUDA.cu
+        src/data/local/LocalEngine.cpp
+        src/data/SimulationEngine.cpp
+        src/thread/ReusableThread.cpp
+
+    )
+
+    set_target_properties(CollisionTest PROPERTIES
+        CUDA_STANDARD 17
+    )
 endif()
