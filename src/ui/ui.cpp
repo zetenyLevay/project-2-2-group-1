@@ -561,12 +561,11 @@ void launchGui() {
         // Sums up every temperature in the grid to prove no heat is lost
         double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
-        ImGui::Text("One time step real world equivalent: %.2f seconds ", seconds_per_step);
+        ImGui::Text("One time step real world equivalent: %.2f ms ", seconds_per_step*100);
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
-        ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
-        ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
+
 
 
         ImGui::End();

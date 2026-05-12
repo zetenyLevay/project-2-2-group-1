@@ -32,7 +32,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     // Set heatsources
     // (x,y) = (1,0); the radiator's position
-    int radX = 1;
+    int radX = 40;
     int radY = 0;
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
@@ -151,10 +151,13 @@ void LocalEngine::stepFoward() {
         }
 
         state.current_step++;
-        history.time_history.push_back(state.current_step);
-        history.max_temp_history.push_back(current_max);
-        history.min_temp_history.push_back(current_min);
-        history.temperature_history.push_back(state.temperatures);
+
+            history.time_history.push_back(state.current_step);
+          history.max_temp_history.push_back(current_max);
+          history.min_temp_history.push_back(current_min);
+          history.temperature_history.push_back(state.temperatures);
+
+
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
