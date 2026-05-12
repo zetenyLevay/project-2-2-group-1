@@ -18,6 +18,8 @@ inline int defaultHeight = 100;
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
+const int radX = 1;
+const int radY = 0;
 const double room_height = 2.5; // in meters
 const double cells_height = (double)defaultHeight; // cells of 1d
 const double delta_T = MAX_TEMP-ROOM_TEMP;

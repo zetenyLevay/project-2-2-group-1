@@ -188,8 +188,6 @@ void launchGui() {
             // Radiator 
             int radWidth = state.width * 0.1;
             int radHeight = state.height * 0.4;
-            double radX = 1;
-            double radY = 0;
             double valveR = radWidth / 8;
             double valveX = radX + (radWidth / 2);
             double valveY = radY + radHeight - (2 * valveR) - 1;

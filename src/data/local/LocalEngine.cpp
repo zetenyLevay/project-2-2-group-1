@@ -27,8 +27,6 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     
     // Set heatsources
     // (x,y) = (1,0); the radiator's position
-    int radX = 1;
-    int radY = 0;
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
 
