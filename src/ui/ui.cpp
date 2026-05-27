@@ -29,8 +29,8 @@ std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSo
 
 }
 
-int defaultWidth = 51;
-int defaultHeight = 51;
+int defaultWidth = 500;
+int defaultHeight = 500;
 
 void startGui(DataSource source) {
     currentSource = source;
@@ -136,8 +136,17 @@ void launchGui() {
         // Gui elements go down below
         
         // --- Simulation window ---
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::Begin("Simulation");
+        ImGui::PopStyleVar();
 
+        static bool background = false;
+
+        // Get rid of weird borders
+        ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0.0f, 0.0f));
+
+        // Change room color
+        ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.0f/255.0f, 0.0f/255.0f, 0.0f/255.0f, 1.0f));
         // We use -1.0f to make the plot fill the entire available window space
         if (ImPlot::BeginPlot("##HeatmapCanvas", ImVec2(-1.0f, -1.0f), ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
             
@@ -147,11 +156,24 @@ void launchGui() {
             // Force the plot to match the exact dimensions of the grid
             ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
 
-            // Change the colors 
-            // ImPlotColormap_Jet goes from Blue (Cold) to Red (Hot)
-            // ImPlotColormap_Hot goes from Black (Cold) to White/Yellow (Hot)
-            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            /*
+            USED FOR TRANSPARENCY, DONT DELETE MIGHT USE LATER
+            // Create new colormap, take each color from the Jet color map and change the opacity to 50%
+            static ImPlotColormap transparentJet = -1;
+            if (transparentJet == -1) {
+                ImVec4 custom_colors[128];
+                for (int i = 0; i < 128; ++i) {
+                    float ratio = float(i) / 127.0f;
+                    custom_colors[i] = ImPlot::SampleColormap((float)i / 127.0f, ImPlotColormap_Jet);
+                    custom_colors[i].w = ratio * 0.85f;
+                }
+                transparentJet = ImPlot::AddColormap("Jet_Transparent", custom_colors, 128);
+            }
+            */
 
+            // Apply the new color map
+            ImPlot::PushColormap(ImPlotColormap_Jet); 
+            
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
@@ -160,10 +182,60 @@ void launchGui() {
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
-            ImPlot::PopColormap();
+            
+            // Drawing the Background/Room
+            ImDrawList* drawList = ImPlot::GetPlotDrawList();
+            ImU32 lineColor = IM_COL32(0, 0, 0, 255);
+            float lineWidth = 2.0f;
 
+            // Radiator 
+            double radWidth = state.width * 0.07;
+            double radHeight = state.height * 0.4;
+            double radX = 1;
+            double radY = 0;
+            double valveR = radWidth / 8;
+            double valveX = radX + (radWidth / 2);
+            double valveY = radY + radHeight - (2 * valveR) - 1;
+            ImVec2 radTopLeft = ImPlot::PlotToPixels(radX, radY + radHeight);
+            ImVec2 radBottomRight = ImPlot::PlotToPixels(radX + radWidth, radY);
+            ImVec2 valveCenter = ImPlot::PlotToPixels(valveX, valveY);
+            ImVec2 valveEdge = ImPlot::PlotToPixels(valveX + valveR, valveY);
+            float valveRPixels = std::abs(valveEdge.x - valveCenter.x);
+
+            // Window   
+            double winWidth = state.width * 0.3;
+            double winHeight = state.height * 0.3;
+            double winX = state.width * 0.55;
+            double winY = state.width * 0.5;
+            double grill1X = winX + (winWidth / 2);
+            ImVec2 winTopLeft = ImPlot::PlotToPixels(winX, winY + winHeight);
+            ImVec2 winBottomRight = ImPlot::PlotToPixels(winX + winWidth, winY);
+            ImVec2 grill1Top = ImPlot::PlotToPixels(grill1X, winY + winHeight);
+            ImVec2 grillBottom = ImPlot::PlotToPixels(grill1X, winY);
+            ImVec2 grillLeft = ImPlot::PlotToPixels(winX, (winHeight / 2) + winY);
+            ImVec2 grillRight = ImPlot::PlotToPixels(winX + winWidth, (winHeight / 2) + winY);
+
+            if (background) {
+                // Main Body
+                drawList->AddRect(radTopLeft, radBottomRight, lineColor, 5.0f, 0, lineWidth);
+                
+                // Valve
+                drawList->AddCircle(valveCenter, valveRPixels, lineColor, 0, lineWidth);
+
+                // Main Pane
+                drawList->AddRect(winTopLeft, winBottomRight, lineColor, 5.0f, 0, lineWidth);
+
+                // Grills
+                drawList->AddLine(grill1Top, grillBottom, lineColor, lineWidth);
+                drawList->AddLine(grillLeft, grillRight, lineColor, lineWidth);
+            }
+
+            ImPlot::PopColormap();
             ImPlot::EndPlot();
         }        
+        ImPlot::PopStyleColor();
+        ImPlot::PopStyleVar();
+
         ImGui::End();
 
         // --- Simulation controls ---
@@ -386,6 +458,18 @@ void launchGui() {
             }
         }
 
+        ImGui::SeparatorText("Simulation Display");
+        if (background) {
+            if (ImGui::Button("Turn off Room")) {
+                background = false;
+            }
+        }
+        else {
+            if (ImGui::Button("Show Room")) {
+                background = true;
+            }
+        }
+
         ImGui::End();
 
         // --- Stats window ---
@@ -480,6 +564,13 @@ void launchGui() {
         // Sums up every temperature in the grid to prove no heat is lost
         double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
+        ImGui::Text("One time step real world equivalent: %.2f seconds ", seconds_per_step);
+        ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
+        ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
+        ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
+        ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
+        ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
+
 
         ImGui::End();
 

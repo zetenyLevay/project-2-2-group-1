@@ -41,7 +41,7 @@ void runWebSocketServer(LocalEngine& engine) {
 }
 
 // relaxation time for temperature spread
-const double heat_spread = 1.0;
+
 
 // Main Writer: Gecenio
 // Reviewer: 

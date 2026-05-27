@@ -19,18 +19,18 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->grid = initialState->cells;
 
     initialState->current_step = 0;
-    //placeholder values as this would have to be calculated from real values and turned into lattice units
-    initialState->heat_spread = 0.1;
-    initialState->viscosity = 0.1;
+    initialState->heat_spread = thermal_relaxation_time;
+    initialState->viscosity = lattice_kinematic_viscosity;
+    initialState->TempAvg=0.0;
+    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
     //relaxation times for heat_spread and visocsity
     //we are using 3 because we divide by cs2 which is 1/3
     initialState->tauF = initialState->viscosity*3 +0.5;
     initialState->tauT = initialState->heat_spread*3  +0.5;
     initialState->TempAvg = 0.0;
-    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source 
+    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, 20.0); // room temp assumption
-    initialState->temperatures[initialState->heatSource] = MAX_TEMP; //give the chosen temeprature to the heat source
 
     // Initialize Grid 
     for (int i = 0; i < cells; i++) {
@@ -60,6 +60,11 @@ void LocalEngine::stepFoward() {
         if (state.current_step < history.temperature_history.size() - 1) {
             state.current_step++;
             state.temperatures = history.temperature_history[state.current_step];
+
+            // Auto play check
+            if (this->getAutoPlayStatus()) {
+                this->stepFoward();
+            }
 
             return;
         }
@@ -104,7 +109,7 @@ void LocalEngine::stepFoward() {
                 state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
                 state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
-            
+
             if (state.temperatures[state.heatSource] > current_max) {
                 current_max = state.temperatures[state.heatSource];
             }
@@ -116,6 +121,7 @@ void LocalEngine::stepFoward() {
         history.min_temp_history.push_back(current_min);
         history.temperature_history.push_back(state.temperatures);
 
+        // Auto play check
         if (this->getAutoPlayStatus()) {
             this->stepFoward();
         }
@@ -138,7 +144,7 @@ void LocalEngine::stepBack() {
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer:
 // Contributers:
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
@@ -152,7 +158,7 @@ void LocalEngine::seekTo(int step) {
 }
 
 // Main Writer: Gecenio
-// Reviewer: 
+// Reviewer:
 // Contributers:
 double LocalEngine::getTotalEnergy() const {
     // Can't really make this run on a seperate thread without changing the function signature.
@@ -167,7 +173,7 @@ double LocalEngine::getTotalEnergy() const {
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld){
-    
+
     //gridNew - output grid, gridOld - input grid
     //heat_spred - controls temperature update
 	// tempAvg - average temperature of the grid
@@ -190,26 +196,26 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             }
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = 4*1e-5 *(temp-TempAvg);  //4*1e-5 represents the thermal expansion strenght
+            double buoyancy = -lattice_buoyancy *(temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
             //half force term of uy
             double uyF=0.0; 
             if(density!=0){
-                uyF=uy+  0.5 * buoyancy;
+                uyF=uy+  0.5 * buoyancy / density;
             }
 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/tauF)*(((cy[d]- uy )* buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uy)*(cy[d] * buoyancy))/(cs2 *cs2));
+                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
                 //The complete Lattice Boltzmann Fluid movement formula
-                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/tauF) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/density_relaxation_time) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
                 //The complete Lattice boltzmann Thermal formula
-                double cuT=cx[d]*ux + cy[d]*uy;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/tauT) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
+                double cuT=cx[d]*ux + cy[d]*uyF;
+                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/thermal_relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
                 
             }
         }
@@ -286,7 +292,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     in.read(reinterpret_cast<char*>(&w), sizeof(w));
     in.read(reinterpret_cast<char*>(&h), sizeof(h));
 
-    bool constantHeat; 
+    bool constantHeat;
     in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
 
     // Create Engine
