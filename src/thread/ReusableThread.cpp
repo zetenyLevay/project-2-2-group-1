@@ -71,9 +71,8 @@ void ReusableThread::terminate() {
 // Main Writer: Berke
 // Reviewer: 
 // Contributers:
-ReusableThread::ReusableThread(SimulationStatePointer initialState) {
-    this->currentStatePtr = initialState;
-    thread = std::thread(&ReusableThread::threadMain, this); // Launch the thread.
+ReusableThread::ReusableThread(std::unique_ptr<SimulationState> initialState): buffers(std::move(initialState)) {
+    this->thread = std::thread(&ReusableThread::threadMain, this); // Launch the thread.
 }
 
 // Main Writer: Berke
@@ -92,26 +91,17 @@ void ReusableThread::submitTask(Task task) {
 /**
  * Gets the current SimulationStatePointer. This is the preferred way of getting the state of the simulation. Can be called from any thread.
  */
-SimulationStatePointer ReusableThread::getState() {
-    SimulationStatePointer statePtr;
-    this->stateMutex.lock();
-    statePtr = this->currentStatePtr;
-    this->stateMutex.unlock();
-    return statePtr;
-}
+const SimulationState* ReusableThread::getState() {
+    std::lock_guard<std::mutex> lock(this->stateMutex);
 
-// Main Writer: Berke
-// Reviewer: 
-// Contributers:
-/**
- * Gets the current SimulationState pointer. The difference between this function and getState() is that this pointer is not defined as const.
- * This method is unsafe and should not be used unless you are very sure there is nothing else that might modify the state.
- * This is used by the file loading function to set up the initial state before any simulations are run.
- */
-std::shared_ptr<SimulationState> ReusableThread::getMutableState() {
-    std::shared_ptr<SimulationState> statePtr = std::const_pointer_cast<SimulationState>(this->currentStatePtr);
+    if (this->bufferSwapNeeded) {
+        this->bufferSwapNeeded = false;
+        return this->buffers.swapPrevious();
+    }
+    else {
+        return this->buffers.getPrevious();
+    }
 
-    return statePtr;
 }
 
 // Main Writer: Berke
@@ -130,12 +120,13 @@ void ReusableThread::threadMain() {
         return;
     }
 
-    auto previousState = this->getState();
-    auto nextState = std::make_shared<SimulationState>(*previousState);
-    task(*nextState);
+    const SimulationState* previousState = this->buffers.getPrevious();
+    std::__1::unique_ptr<SimulationState>& nextState = this->buffers.getNext();
+    task(*previousState, *nextState);
 
     stateMutex.lock();
-    currentStatePtr = nextState;
+    this->buffers.swapNext();
+    this->bufferSwapNeeded = true;
     stateMutex.unlock();
 
     goto beginning; // I prefer this to having the entire method indented in a while true loop.

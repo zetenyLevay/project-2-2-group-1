@@ -1,4 +1,5 @@
 #include "LocalEngine.h"
+#include "../../thread/ReusableThread.h"
 #include <numeric>
 #include <fstream>
 #include <iostream>
@@ -9,7 +10,7 @@
 // Reviewer: 
 // Contributers: 
 LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : SimulationEngine(width, height) {
-    auto initialState = std::make_shared<SimulationState>();
+    auto initialState = std::make_unique<SimulationState>();
 
     initialState->width = width;
     initialState->height = height;
@@ -42,24 +43,31 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     }
     initialState->TempAvg = initialState->TempAvg/cells;
 
-    history.time_history.push_back(initialState->current_step);
-    history.max_temp_history.push_back(MAX_TEMP);
-    history.min_temp_history.push_back(ROOM_TEMP);
-    history.temperature_history.push_back(initialState->temperatures);
+    this->history = std::make_unique<SimulationHistory>();
+
+    this->history->time_history.push_back(initialState->current_step);
+    this->history->max_temp_history.push_back(MAX_TEMP);
+    this->history->min_temp_history.push_back(ROOM_TEMP);
+    this->history->temperature_history.push_back(initialState->temperatures);
 
     // Launch the compute thread.
-    this->thread = std::make_unique<ReusableThread>(initialState);
+    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
+}
+
+LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h) {
+    this->history = std::move(initialHistory);
+    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
 }
 
 // Main Writer: Gecenio 
 // Reviewer: 
 // Contributers: Kristian, Berke
 void LocalEngine::stepFoward() {
-    thread->submitTask([this](SimulationState& state) {
+    thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
         // If already calculated just set the grid and temperatures again 
-        if (state.current_step < history.temperature_history.size() - 1) {
-            state.current_step++;
-            state.temperatures = history.temperature_history[state.current_step];
+        if (previousState.current_step < history->temperature_history.size() - 1) {
+            nextState.current_step = previousState.current_step + 1;
+            nextState.temperatures = history->temperature_history[nextState.current_step];
 
             // Auto play check
             if (this->getAutoPlayStatus()) {
@@ -70,56 +78,56 @@ void LocalEngine::stepFoward() {
         }
 
         // update heatSource back it its oringinal temperature
-        if (state.isConstantHeatSource) {
-            state.temperatures[state.heatSource] = MAX_TEMP;
+        if (previousState.isConstantHeatSource) {
+            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
             for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
+                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
         }
 
-        Grid gridTemp(state.cells);
-        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
+        Grid gridTemp(previousState.cells);
+        this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
 
-        this->Stream(gridTemp, state.grid);
+        this->Stream(gridTemp, nextState.grid);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
-        state.TempAvg=0.0;
+        nextState.TempAvg=0.0;
         for (int i = 0; i < cells; i++) {
             double temp = 0.0;
 
             for (int d = 0; d < 9; ++d) {
-                temp += state.grid.g[d][i];
+                temp += nextState.grid.g[d][i];
             }
-            state.temperatures[i] = temp;
-            state.TempAvg = state.TempAvg + state.temperatures[i];
+            nextState.temperatures[i] = temp;
+            nextState.TempAvg += nextState.temperatures[i];
 
             // Find Max and Min for the graph
-            if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
-            if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
+            if (nextState.temperatures[i] > current_max) current_max = nextState.temperatures[i];
+            if (nextState.temperatures[i] < current_min) current_min = nextState.temperatures[i];
         }
-        state.TempAvg= state.TempAvg / cells;
+        nextState.TempAvg= nextState.TempAvg / cells;
 
         //update heatSource back it its oringinal temperature
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        if (state.isConstantHeatSource) {
-            state.temperatures[state.heatSource] = MAX_TEMP;
+        if (previousState.isConstantHeatSource) {
+            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
             for (int d = 0; d < 9; ++d) {
-                state.grid.g[d][state.heatSource] = weights[d] * state.temperatures[state.heatSource];
-                state.grid.f[d][state.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
+                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
 
-            if (state.temperatures[state.heatSource] > current_max) {
-                current_max = state.temperatures[state.heatSource];
+            if (previousState.temperatures[previousState.heatSource] > current_max) {
+                current_max = previousState.temperatures[previousState.heatSource];
             }
         }
 
-        state.current_step++;
-        history.time_history.push_back(state.current_step);
-        history.max_temp_history.push_back(current_max);
-        history.min_temp_history.push_back(current_min);
-        history.temperature_history.push_back(state.temperatures);
+        nextState.current_step = previousState.current_step + 1;
+        history->time_history.push_back(nextState.current_step);
+        history->max_temp_history.push_back(current_max);
+        history->min_temp_history.push_back(current_min);
+        history->temperature_history.push_back(nextState.temperatures);
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
@@ -132,14 +140,14 @@ void LocalEngine::stepFoward() {
 // Reviewer: 
 // Contributers:
 void LocalEngine::stepBack() {
-    thread->submitTask([this](SimulationState& state) {
+    thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
         // Prevent going back beyond initial state
-        if (state.current_step <= 0) return;
+        if (previousState.current_step <= 0) return;
     
         // Decrement the current step
-        state.current_step--;
+        nextState.current_step = previousState.current_step - 1;
 
-        state.temperatures = history.temperature_history[state.current_step];
+        nextState.temperatures = history->temperature_history[nextState.current_step];
     });
 }
 
@@ -148,12 +156,12 @@ void LocalEngine::stepBack() {
 // Contributers:
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
-    thread->submitTask([this, step](SimulationState& state) {
+    thread->submitTask([this, step](const SimulationState& previousState, SimulationState& nextState) {
         // Prevent going out of bounds
-        if (step < 0 || step >= history.temperature_history.size()) return;
+        if (step < 0 || step >= history->temperature_history.size()) return;
 
-        state.current_step = step;
-        state.temperatures = history.temperature_history[state.current_step];
+        nextState.current_step = step;
+        nextState.temperatures = history->temperature_history[nextState.current_step];
     });
 }
 
@@ -172,7 +180,7 @@ double LocalEngine::getTotalEnergy() const {
 // Main Writer: Cosmin
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld){
+void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, const Grid &gridOld){
 
     //gridNew - output grid, gridOld - input grid
     //heat_spred - controls temperature update
@@ -295,27 +303,26 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     bool constantHeat;
     in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
 
-    // Create Engine
-    auto loadedEngine = std::make_unique<LocalEngine>(w, h, constantHeat);
-    auto state = loadedEngine->getMutableState();
+    std::unique_ptr<SimulationState> state = std::make_unique<SimulationState>();
+    std::unique_ptr<SimulationHistory> history = std::make_unique<SimulationHistory>();
 
     // Get history length
     size_t history_count;
     in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
 
     // Read basic history information
-    loadedEngine->history.time_history.resize(history_count);
-    loadedEngine->history.max_temp_history.resize(history_count);
-    loadedEngine->history.min_temp_history.resize(history_count);
+    history->time_history.resize(history_count);
+    history->max_temp_history.resize(history_count);
+    history->min_temp_history.resize(history_count);
 
-    in.read(reinterpret_cast<char*>(loadedEngine->history.time_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(loadedEngine->history.max_temp_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(loadedEngine->history.min_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->time_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->max_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->min_temp_history.data()), history_count * sizeof(double));
 
     // Get full temperature history
-    loadedEngine->history.temperature_history.resize(history_count, std::vector<double>(state->cells));
+    history->temperature_history.resize(history_count, std::vector<double>(state->cells));
     for (size_t i = 0; i < history_count; ++i) {
-        in.read(reinterpret_cast<char*>(loadedEngine->history.temperature_history[i].data()), state->cells * sizeof(double));
+        in.read(reinterpret_cast<char*>(history->temperature_history[i].data()), state->cells * sizeof(double));
     }
 
 
@@ -326,18 +333,18 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
 
     // Go to the last frame of the sim
     if (history_count > 0) {
-        state->current_step = loadedEngine->history.time_history.back();
-        state->temperatures = loadedEngine->history.temperature_history.back();
+        state->current_step = history->time_history.back();
+        state->temperatures = history->temperature_history.back();
     }
 
     in.close();
-    return loadedEngine;
+    return std::make_unique<LocalEngine>(w, h, constantHeat, std::move(state), std::move(history));
 }
 
 // Main Writer: Kristian
 // Reviewer: 
 // Contributers: 
-bool saveSimulation(const SimulationState& state, const SimulationHistory& history, const std::string& filepath) {
+bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath) {
     std::filesystem::path pathObj(filepath);
     std::filesystem::path dir = pathObj.parent_path();
 
@@ -357,17 +364,17 @@ bool saveSimulation(const SimulationState& state, const SimulationHistory& histo
     out.write(reinterpret_cast<const char*>(&state.isConstantHeatSource), sizeof(state.isConstantHeatSource));
 
     // Write history length
-    size_t history_count = history.time_history.size();
+    size_t history_count = history->time_history.size();
     out.write(reinterpret_cast<const char*>(&history_count), sizeof(history_count));
 
     // Write basic history information
-    out.write(reinterpret_cast<const char*>(history.time_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(history.max_temp_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(history.min_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->time_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->max_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->min_temp_history.data()), history_count * sizeof(double));
 
     // Write temperature history
     for (size_t i = 0; i < history_count; ++i) {
-        out.write(reinterpret_cast<const char*>(history.temperature_history[i].data()), state.cells * sizeof(double));
+        out.write(reinterpret_cast<const char*>(history->temperature_history[i].data()), state.cells * sizeof(double));
     }
 
     // Get most recent grid

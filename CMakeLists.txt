@@ -89,6 +89,9 @@ add_library(simulation_logic
     src/data/local/LocalEngine.cpp
     src/data/local/LocalEngine.h
 
+    src/thread/SimulationStateBuffers.cpp
+    src/thread/SimulationStateBuffers.h
+
     src/thread/ReusableThread.cpp
     src/thread/ReusableThread.h
 

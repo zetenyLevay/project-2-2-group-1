@@ -2,8 +2,9 @@
 #include "main.h"
 
 struct SimulationState;
+class ReusableThread;
 
-#include "../thread/ReusableThread.h"
+
 #include <vector>
 #include <string>
 #include <memory>
@@ -41,17 +42,13 @@ public:
 
     std::unique_ptr<ReusableThread> thread;
 
-    std::shared_ptr<const SimulationState> getState();
-
-    std::shared_ptr<SimulationState> getMutableState();
-
-    SimulationHistory history;
+    const SimulationState* getState();
 
     SimulationEngine(int w, int h);
 
     const int getIndex(int x, int y);
 
-    virtual ~SimulationEngine() = default;
+    virtual ~SimulationEngine();
 
     // Step foward one frame
     virtual void stepFoward() = 0;
@@ -63,8 +60,13 @@ public:
     bool getAutoPlayStatus();
     void setAutoPlayStatus(bool status);
 
+    const SimulationHistory* getReadOnlyHistory();
+
+    protected:
+        std::unique_ptr<SimulationHistory> history;
+
     private:
-        bool autoPlay = false;
+        bool autoPlay = false;    
 };
 
 enum DataSource {
