@@ -15,10 +15,14 @@ class SimulationStateBuffers {
         // To be used when data thread completes a simulation step.
         std::unique_ptr<SimulationState>& swapNext();
 
+        const SimulationState* getMostRecent();
+
         SimulationStateBuffers(std::unique_ptr<SimulationState> initialState);
 
     private:
         std::unique_ptr<SimulationState> previous; // Current SimulationState held by the main thread.
         std::unique_ptr<SimulationState> current; // SimulationState that is ready to be passed to the main thread.
         std::unique_ptr<SimulationState> next; // SimulationState that can be safely changed by the data thread.
+
+        bool previousIsMostRecent = true;
 };

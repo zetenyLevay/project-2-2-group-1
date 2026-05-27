@@ -120,7 +120,7 @@ void ReusableThread::threadMain() {
         return;
     }
 
-    const SimulationState* previousState = this->buffers.getPrevious();
+    const SimulationState* previousState = this->buffers.getMostRecent();
     std::__1::unique_ptr<SimulationState>& nextState = this->buffers.getNext();
     task(*previousState, *nextState);
 

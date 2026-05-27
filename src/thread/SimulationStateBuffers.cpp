@@ -21,6 +21,8 @@ std::unique_ptr<SimulationState>& SimulationStateBuffers::getNext() {
 }
 
 const SimulationState* SimulationStateBuffers::swapPrevious() {
+    this->previousIsMostRecent = true;
+
     std::unique_ptr<SimulationState>& current = this->getCurrent();
 
     std::swap(this->previous, current);
@@ -29,6 +31,8 @@ const SimulationState* SimulationStateBuffers::swapPrevious() {
 }
 
 std::unique_ptr<SimulationState>& SimulationStateBuffers::swapNext() {
+    this->previousIsMostRecent = false;
+
     std::unique_ptr<SimulationState>& current = this->getCurrent();
     std::unique_ptr<SimulationState>& next = this->getNext();
 
@@ -39,4 +43,13 @@ std::unique_ptr<SimulationState>& SimulationStateBuffers::swapNext() {
 
 SimulationStateBuffers::SimulationStateBuffers(std::unique_ptr<SimulationState> initialState) {
     this->previous = std::move(initialState);
+}
+
+const SimulationState* SimulationStateBuffers::getMostRecent() {
+    if (this->previousIsMostRecent) {
+        return this->getPrevious();
+    }
+    else {
+        return this->getCurrent().get();
+    }
 }
