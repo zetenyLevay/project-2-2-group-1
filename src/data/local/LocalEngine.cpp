@@ -65,9 +65,9 @@ LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<
 void LocalEngine::stepFoward() {
     thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
         // If already calculated just set the grid and temperatures again 
-        if (previousState.current_step < history->temperature_history.size() - 1) {
+        if (previousState.current_step < this->history->temperature_history.size() - 1) {
             nextState.current_step = previousState.current_step + 1;
-            nextState.temperatures = history->temperature_history[nextState.current_step];
+            nextState.temperatures = this->history->temperature_history[nextState.current_step];
 
             // Auto play check
             if (this->getAutoPlayStatus()) {
@@ -118,16 +118,16 @@ void LocalEngine::stepFoward() {
                 nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
             }
 
-            if (previousState.temperatures[previousState.heatSource] > current_max) {
-                current_max = previousState.temperatures[previousState.heatSource];
+            if (nextState.temperatures[nextState.heatSource] > current_max) {
+                current_max = nextState.temperatures[nextState.heatSource];
             }
         }
 
         nextState.current_step = previousState.current_step + 1;
-        history->time_history.push_back(nextState.current_step);
-        history->max_temp_history.push_back(current_max);
-        history->min_temp_history.push_back(current_min);
-        history->temperature_history.push_back(nextState.temperatures);
+        this->history->time_history.push_back(nextState.current_step);
+        this->history->max_temp_history.push_back(current_max);
+        this->history->min_temp_history.push_back(current_min);
+        this->history->temperature_history.push_back(nextState.temperatures);
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
