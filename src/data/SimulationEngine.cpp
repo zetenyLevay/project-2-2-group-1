@@ -1,4 +1,5 @@
 #include "SimulationEngine.h"
+#include "../thread/ReusableThread.h"
 #include <stdexcept>
 
 
@@ -19,15 +20,8 @@ void SimulationEngine::setAutoPlayStatus(bool status) {
 /**
  * Gets the current state of the simulation.
  */
-SimulationStatePointer SimulationEngine::getState() {
+const SimulationState* SimulationEngine::getState() {
     return this->thread->getState();
-}
-
-/**
- * Gets the current state of the simulation as a mutable pointer. This method is unsafe, use getState() whenever possible.
- */
-std::shared_ptr<SimulationState> SimulationEngine::getMutableState() {
-    return this->thread->getMutableState();
 }
 
 // Main Writer: Gecenio
@@ -43,3 +37,9 @@ const int SimulationEngine::getIndex(int x, int y) {
     }
     throw std::out_of_range("Index out of bounds");
 }
+
+const SimulationHistory* SimulationEngine::getReadOnlyHistory() {
+    return this->history.get();
+}
+
+SimulationEngine::~SimulationEngine() = default;

@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <functional>
 #include "main.h"
+#include "../thread/ReusableThread.h"
 
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
@@ -78,8 +79,9 @@ void launchGui() {
         double current_time = glfwGetTime();
         
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
-        std::shared_ptr<const SimulationState> statePtr = engine->getState();
-        const SimulationState& state = *statePtr;
+        const SimulationState& state = *(engine->getState());
+
+        const SimulationHistory* history = engine->getReadOnlyHistory();
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
@@ -311,7 +313,7 @@ void launchGui() {
 
                 // Create and display the new sim
                 engine = std::move(createEngine(w, h, constantHeat));
-                //history = engine->history; DO NOT UNCOMMENT
+                history = engine->getReadOnlyHistory();
                 MAX_TEMP = temperature;
                 scaleMax = MAX_TEMP*1.1;
 
@@ -346,7 +348,7 @@ void launchGui() {
 
             ImGui::SameLine();
             if (ImGui::Button("Confirm")) {
-                if (saveSimulation(state, engine->history, path)) {
+                if (saveSimulation(state, engine->getReadOnlyHistory(), path)) {
                     std::cout << "Saved to: " << path << std::endl;
                 }
                 else {
@@ -372,9 +374,8 @@ void launchGui() {
                         auto loadedEngine = loadLocalSimulation(selectedPath);
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
-                            //history = engine->history; DO NOT UNCOMMENT
-
-                            MAX_TEMP = engine->history.max_temp_history.front();
+                            history = engine->getReadOnlyHistory();
+                            MAX_TEMP = history->max_temp_history.front();
                             scaleMax = MAX_TEMP * 1.1;
 
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
@@ -471,8 +472,8 @@ void launchGui() {
         ImGui::Begin("Stats");
         ImGui::SeparatorText("Temperature Data");
 
-        double hotSpot = engine->history.max_temp_history[state.current_step];
-        double coldSpot = engine->history.min_temp_history[state.current_step];
+        double hotSpot = history->max_temp_history[state.current_step];
+        double coldSpot = history->min_temp_history[state.current_step];
         double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
@@ -505,21 +506,21 @@ void launchGui() {
             // Lock the Y-Axis between 15C and 105C so the graph doesn't jump around
             ImPlot::SetupAxisLimits(ImAxis_Y1, 15.0, scaleMax, ImGuiCond_Always);
 
-            double ratio = engine->history.max_temp_history[state.current_step] / engine->history.min_temp_history[state.current_step];
+            double ratio = history->max_temp_history[state.current_step] / history->min_temp_history[state.current_step];
 
 
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
-            ImPlot::PlotLine("Max Temp (Hot Spot)", engine->history.time_history.data(), engine->history.max_temp_history.data(), engine->history.time_history.size());
-            ImPlot::PlotLine("Min Temp (Cold Spot)", engine->history.time_history.data(), engine->history.min_temp_history.data(), engine->history.time_history.size());
+            ImPlot::PlotLine("Max Temp (Hot Spot)", history->time_history.data(), history->max_temp_history.data(), history->time_history.size());
+            ImPlot::PlotLine("Min Temp (Cold Spot)", history->time_history.data(), history->min_temp_history.data(), history->time_history.size());
 
 
             // Time step marker
-            if (!engine->history.time_history.empty() && state.current_step < engine->history.time_history.size()) {
+            if (!history->time_history.empty() && state.current_step < history->time_history.size()) {
                 // Get the current time, max and min
-                double cur_time = engine->history.time_history[state.current_step];
-                double cur_max = engine->history.max_temp_history[state.current_step];
-                double cur_min = engine->history.min_temp_history[state.current_step];
+                double cur_time = history->time_history[state.current_step];
+                double cur_max = history->max_temp_history[state.current_step];
+                double cur_min = history->min_temp_history[state.current_step];
 
                 ImPlotSpec specLine;
                 specLine.LineColor = ImVec4(0.7f, 0.7f, 0.7f, 0.6f); // Grey
@@ -574,7 +575,7 @@ void launchGui() {
 
         /// Get current limits of the simulation
         int currentStep = state.current_step;
-        int maxStep = engine->history.temperature_history.empty() ? 0 : engine->history.temperature_history.size() - 1;
+        int maxStep = history->temperature_history.empty() ? 0 : history->temperature_history.size() - 1;
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (ImGui::GetContentRegionAvail().y - 20) * 0.5f);
 

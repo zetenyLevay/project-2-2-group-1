@@ -18,13 +18,13 @@ std::thread runSimulations(int width, int height, int temperature, bool constant
             bool isComplete = false; // The simulation is complete once the hot spot and cold spot are equal 
             int expectedStep = 0;
 
-            SimulationHistory& history = engine.history;
+            const SimulationHistory* history = engine.getReadOnlyHistory();
 
             while (!isComplete) {
                 engine.stepFoward();
                 expectedStep++;
 
-                auto state = engine.getState();
+                const SimulationState* state = engine.getState();
 
                 // Make sure we are in sync with the thread
                 while (state->current_step < expectedStep) {
@@ -32,8 +32,8 @@ std::thread runSimulations(int width, int height, int temperature, bool constant
                     state = engine.getState();
                 }
 
-                double maxTemp = history.max_temp_history.back();
-                double minTemp = history.min_temp_history.back();
+                double maxTemp = history->max_temp_history.back();
+                double minTemp = history->min_temp_history.back();
 
                 // The effective equilibream, no need to check for until it is exactly equal
                 if (std::abs(maxTemp - minTemp) < 0.1) {

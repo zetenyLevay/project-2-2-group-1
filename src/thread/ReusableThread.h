@@ -12,9 +12,9 @@
 class ReusableThread;
 
 #include "../data/SimulationEngine.h"
+#include "SimulationStateBuffers.h"
 
-using SimulationStatePointer = std::shared_ptr<const SimulationState>;
-using Task = std::function<void(SimulationState &)>;
+using Task = std::function<void(const SimulationState&, SimulationState&)>;
 
 class TaskQueue {
     public:
@@ -35,22 +35,22 @@ class ReusableThread {
 
         void submitTask(Task task);
 
-        SimulationStatePointer getState();
+        const SimulationState* getState();
 
-        std::shared_ptr<SimulationState> getMutableState();
-
-        ReusableThread(SimulationStatePointer initialState);
+        ReusableThread(std::unique_ptr<SimulationState> initialState);
 
         ~ReusableThread();
 
         void terminate();
 
-        private:
+    private:
         bool terminateNext = false;
         
         std::thread thread;
         void threadMain();
 
-        SimulationStatePointer currentStatePtr;
         std::mutex stateMutex;
+
+        SimulationStateBuffers buffers;
+        bool bufferSwapNeeded = false;
 };
