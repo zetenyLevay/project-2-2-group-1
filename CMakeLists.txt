@@ -132,16 +132,14 @@ add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
 
 
 if(CMAKE_CUDA_COMPILER)
-    add_executable(CollisionTest
-        src/CUDA/CollisionTest.cpp
-        src/CUDA/CollisionCUDA.cu
-        src/data/local/LocalEngine.cpp
-        src/data/SimulationEngine.cpp
-        src/thread/ReusableThread.cpp
-        
+    add_executable(CudaBenchmark
+        src/CUDA/kernels.cu
+        src/CUDA/CudaEngine.cu
     )
 
-    set_target_properties(CollisionTest PROPERTIES
+    set_target_properties(CudaBenchmark PROPERTIES
         CUDA_STANDARD 17
     )
+
+    target_include_directories(CudaBenchmark PRIVATE src/main)
 endif()
