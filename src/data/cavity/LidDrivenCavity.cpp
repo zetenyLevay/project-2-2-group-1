@@ -54,6 +54,8 @@ LidDrivenCavity::LidDrivenCavity(int N, double Re, double U_lid)
     initialState->temperature_history.push_back(initialState->temperatures);
     initialState->grid_history.push_back(initialState->grid);
 
+    gridTemp = Grid(initialState->cells);
+
     this->thread = std::make_unique<ReusableThread>(initialState);
 }
 
@@ -68,7 +70,6 @@ void LidDrivenCavity::stepFoward() {
             return;
         }
 
-        Grid gridTemp(state.cells);
 
         // BGK collision (no forcing and no thermal)
         Collision(tau, gridTemp, state.grid);
@@ -156,16 +157,26 @@ void LidDrivenCavity::Collision(double tau, Grid& gridNew, const Grid& gridOld) 
     const int w = width;
     const int h = height;
 
-    const double* f_old = gridOld.f.data();
-    double* f_new = gridNew.f.data();
-
     const double inv_tau = 1.0 / tau;
     const double inv_cs2 = 3.0;       // 1/cs² where cs² = 1/3
     const double inv_cs4 = 9.0;       // 1/cs⁴
 
+#ifdef USE_OMP_TARGET_OFFLOAD
+    const double* f_old = gridOld.f.data();
+    double* f_new = gridNew.f.data();
+
+    #pragma omp target teams distribute parallel for collapse(2) \
+        map(to: f_old[:9*n_cells]) \
+        map(from: f_new[:9*n_cells]) \
+        firstprivate(n_cells, w, h, inv_tau, inv_cs2, inv_cs4)
+#else
+    const double* f_old = gridOld.f.data();
+    double* f_new = gridNew.f.data();
+
     #ifdef _OPENMP
     #pragma omp parallel for collapse(2) schedule(dynamic)
     #endif
+#endif
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             int idx = y * w + x;
@@ -213,9 +224,6 @@ void LidDrivenCavity::Stream(const Grid& gridOld, Grid& gridNew, double U_lid) {
     const int w = width;
     const int h = height;
 
-    const double* f_old = gridOld.f.data();
-    double* f_new = gridNew.f.data();
-
     // Precompute lid correction coefficients
     // Top lid (y=0) moving right with velocity U_lid.
     // Unknown directions at the top wall going INTO the fluid: d=2, d=5, d=6.
@@ -226,9 +234,22 @@ void LidDrivenCavity::Stream(const Grid& gridOld, Grid& gridNew, double U_lid) {
     const double lid_corr_d5 =  U_lid / 6.0;
     const double lid_corr_d6 = -U_lid / 6.0;
 
+#ifdef USE_OMP_TARGET_OFFLOAD
+    const double* f_old = gridOld.f.data();
+    double* f_new = gridNew.f.data();
+
+    #pragma omp target teams distribute parallel for collapse(2) \
+        map(to: f_old[:9*n_cells]) \
+        map(from: f_new[:9*n_cells]) \
+        firstprivate(n_cells, w, h, lid_corr_d5, lid_corr_d6)
+#else
+    const double* f_old = gridOld.f.data();
+    double* f_new = gridNew.f.data();
+
     #ifdef _OPENMP
     #pragma omp parallel for collapse(2) schedule(static)
     #endif
+#endif
     for (int y = 0; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             int idx = y * w + x;
@@ -281,40 +302,66 @@ void LidDrivenCavity::runUntilConvergence(double tolerance, int maxSteps, int mi
     std::cout << "Running lid-driven cavity: N=" << N
               << ", Re=" << Re_number
               << ", U_lid=" << lid_U
-              << ", tau=" << tau
-              << "\n";
+              << ", tau=" << tau << "\n";
+
+    auto state = getMutableState();
+    const int n = state->cells;
 
     for (int step = 0; step < maxSteps; ++step) {
-        stepFoward();
+        Collision(tau, gridTemp, state->grid);
+        Stream(gridTemp, state->grid, lid_U);
 
-        // Wait for the task to complete
-        auto state = getState();
-        int synced = 0;
-        while (state->current_step <= step) {
-            state = getState();
-		std::this_thread::yield(); // CPU can be used for other things
-            if (++synced > 1000000) break;
+        // Diagnostics on CPU — data is already on host after Stream's map(from: f_new...)
+        const double* f_state = state->grid.f.data();
+        double* temps = state->temperatures.data();
+
+        double max_vel = 0.0;
+        double sum_sq_diff = 0.0;
+        double sum_sq_new = 0.0;
+
+        #ifdef _OPENMP
+        #pragma omp parallel for reduction(+:sum_sq_diff,sum_sq_new) reduction(max:max_vel)
+        #endif
+        for (int i = 0; i < n; ++i) {
+            double rho = 0.0, ux = 0.0, uy = 0.0;
+            for (int d = 0; d < 9; ++d) {
+                double val = f_state[d * n + i];
+                rho += val;
+                ux += val * cx[d];
+                uy += val * cy[d];
+            }
+            if (rho != 0.0) { ux /= rho; uy /= rho; }
+
+            double vel_new = std::sqrt(ux * ux + uy * uy);
+            double vel_old = temps[i];
+
+            sum_sq_diff += (vel_new - vel_old) * (vel_new - vel_old);
+            sum_sq_new += vel_new * vel_new;
+            if (vel_new > max_vel) max_vel = vel_new;
+            temps[i] = vel_new;
         }
 
-        double res = getResidual();
+        double residual = (sum_sq_new > 1e-10) ? std::sqrt(sum_sq_diff / sum_sq_new) : 0.0;
 
         if (step % 500 == 0 || step == maxSteps - 1) {
-            std::cout << "  Step " << std::setw(6) << state->current_step
-                      << " | residual: " << std::scientific << std::setprecision(6) << res
-                      << " | max |u|: " << std::fixed << std::setprecision(6) << state->max_temp_history.back()
-                      << "\n";
+            std::cout << "  Step " << std::setw(6) << step
+                      << " | residual: " << std::scientific << std::setprecision(6) << residual
+                      << " | max |u|: " << std::fixed << std::setprecision(6) << max_vel << "\n";
         }
 
-        if (hasConverged(tolerance, minSteps)) {
-            auto finalState = getState();
-            std::cout << "Converged at step " << finalState->current_step
-                      << " (residual = " << std::scientific << res << ")\n";
-            return;
+        // Update history so extractProfiles and getState see the results
+        state->current_step = step;
+        state->time_history.push_back(step);
+        state->max_temp_history.push_back(max_vel);
+        state->min_temp_history.push_back(residual);
+        state->temperature_history.push_back(state->temperatures);
+
+        if (step >= minSteps && residual < tolerance) {
+            std::cout << "Converged at step " << step
+                      << " (residual = " << std::scientific << residual << ")\n";
+            break;
         }
     }
-
-    std::cout << "Reached maxSteps=" << maxSteps
-              << " with residual=" << std::scientific << getResidual() << "\n";
 }
 
 void LidDrivenCavity::extractProfiles(const std::string& filepath) {

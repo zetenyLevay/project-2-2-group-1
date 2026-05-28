@@ -21,7 +21,7 @@ if(OpenMP_CXX_FOUND)
     set(OMP_OFFLOAD_TARGET "nvptx-none" CACHE STRING "OpenMP offload target (e.g. nvptx-none, amdgcn-amd-amdhsa)")
 
     if(ENABLE_OMP_OFFLOAD)
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET} -foffload=-latomic")
         add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
         message(STATUS "OpenMP target offloading FORCE-ENABLED: ${OMP_OFFLOAD_TARGET}")
     else()
@@ -36,7 +36,7 @@ if(OpenMP_CXX_FOUND)
             }
         " HAS_OMP_OFFLOAD)
         if(HAS_OMP_OFFLOAD)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET} -foffload=-latomic")
             add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
             message(STATUS "OpenMP target offloading enabled: ${OMP_OFFLOAD_TARGET}")
         else()
@@ -151,6 +151,10 @@ add_library(simulation_logic
 
     src/main/main.h
 )
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(simulation_logic PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 # --- Main executables ---
 if(BUILD_GUI)

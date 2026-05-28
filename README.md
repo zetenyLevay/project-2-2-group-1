@@ -57,7 +57,7 @@ Builds the full desktop application with heatmap visualization, controls, and We
 
 ``` bash
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ./project_2_2_group_1
 ```
@@ -67,7 +67,7 @@ For running simulations on a cluster or headless system without OpenGL/display d
 
 ``` bash
 mkdir build && cd build
-cmake .. -DBUILD_GUI=OFF
+cmake .. -DBUILD_GUI=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
 ```
@@ -77,7 +77,7 @@ If your system has GCC with `nvptx-tools` installed, offloading is auto-detected
 Otherwise, force-enable it for cluster builds:
 
 ``` bash
-cmake .. -DENABLE_OMP_OFFLOAD=ON -DOMP_OFFLOAD_TARGET=nvptx-none
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_GUI=OFF -DENABLE_OMP_OFFLOAD=ON -DOMP_OFFLOAD_TARGET=nvptx-none -DCMAKE_CXX_FLAGS="-fcf-protection=none -fno-stack-protector -DUSE_OMP_TARGET_OFFLOAD"
 cmake --build .
 ```
 

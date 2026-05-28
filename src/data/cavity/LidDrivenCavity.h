@@ -18,6 +18,7 @@ public:
     void runUntilConvergence(double tolerance = 1e-8, int maxSteps = 100000, int minSteps = 1000);
     void extractProfiles(const std::string& filepath);
 
+    Grid gridTemp;
     double tau;        // BGK relaxation time
     double lid_U;      // lid velocity (lattice units)
     double Re_number;  // Reynolds number
