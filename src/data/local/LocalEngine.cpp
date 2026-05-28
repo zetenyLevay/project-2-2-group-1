@@ -50,7 +50,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
-        initialState->temperatures[idx] = MAX_TEMP;
+        initialState->temperatures[idx] = 30.0;
     }
 
     // Initialize Grid
@@ -97,7 +97,10 @@ void LocalEngine::stepFoward() {
         // update heatSource back it its oringinal temperature
         if (state.isConstantHeatSource) {
             for (int idx : state.heatSources) {
-                state.temperatures[idx] = MAX_TEMP;
+                if(state.temperatures[idx]<MAX_TEMP){
+                    state.temperatures[idx] = state.temperatures[idx]+0.05;
+                }
+                
                 for (int d = 0; d < 9; ++d) {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
                     state.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
@@ -137,7 +140,9 @@ void LocalEngine::stepFoward() {
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
         if (state.isConstantHeatSource) {
             for (int idx : state.heatSources) {
-                state.temperatures[idx] = MAX_TEMP;
+                if(state.temperatures[idx]<MAX_TEMP){
+                    state.temperatures[idx] = state.temperatures[idx]+0.05;
+                }
                 for (int d = 0; d < 9; ++d) {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
                     state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
