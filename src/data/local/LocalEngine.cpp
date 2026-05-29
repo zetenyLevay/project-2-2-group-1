@@ -50,7 +50,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
-        initialState->temperatures[idx] = 30.0;
+        initialState->temperatures[idx] = ROOM_TEMP;
     }
 
     // Initialize Grid
@@ -68,7 +68,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->TempAvg = tempAvgLocal;
 
     history.time_history.push_back(initialState->current_step);
-    history.max_temp_history.push_back(MAX_TEMP);
+    history.max_temp_history.push_back(ROOM_TEMP);
     history.min_temp_history.push_back(ROOM_TEMP);
     history.temperature_history.push_back(initialState->temperatures);
 
@@ -98,7 +98,7 @@ void LocalEngine::stepFoward() {
         if (state.isConstantHeatSource) {
             for (int idx : state.heatSources) {
                 if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.05;
+                    state.temperatures[idx] = state.temperatures[idx]+0.1;
                 }
                 
                 for (int d = 0; d < 9; ++d) {
