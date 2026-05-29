@@ -115,9 +115,9 @@ add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
 
 
 if(CMAKE_CUDA_COMPILER)
-    add_executable(CudaBenchmark
-        src/CUDA/kernels.cu
-        src/CUDA/CudaEngine.cu
+    add_executable(
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cu
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
     )
 
     set_target_properties(CudaBenchmark PROPERTIES
