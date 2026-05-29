@@ -31,29 +31,6 @@ add_library(asio INTERFACE)
 target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
 target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
 
-# WebSocket++
-FetchContent_Declare(
-    websocketpp
-    GIT_REPOSITORY https://github.com/zaphoyd/websocketpp.git
-    GIT_TAG        0.8.2
-    # Deletes the outdated CMakeLists.txt to make it compatible with cmake 4.3
-    PATCH_COMMAND  ${CMAKE_COMMAND} -E rm -f CMakeLists.txt
-)
-FetchContent_MakeAvailable(websocketpp)
-
-# Force C++11 to bypass boost
-add_library(websocketpp INTERFACE)
-target_include_directories(websocketpp INTERFACE ${websocketpp_SOURCE_DIR})
-target_compile_definitions(websocketpp INTERFACE 
-    ASIO_STANDALONE
-    _WEBSOCKETPP_CPP11_STL_
-    _WEBSOCKETPP_CPP11_THREAD_
-    _WEBSOCKETPP_CPP11_FUNCTIONAL_
-    _WEBSOCKETPP_CPP11_SYSTEM_ERROR_
-    _WEBSOCKETPP_CPP11_RANDOM_DEVICE_
-    _WEBSOCKETPP_CPP11_MEMORY_
-)
-
 add_subdirectory(vendor/glfw-3.4)
 
 set(IMGUI_SOURCES
