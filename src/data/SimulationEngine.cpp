@@ -35,6 +35,7 @@ int SimulationEngine::getIndex(int x, int y) {
             return y * this->width + x;
         }
     }
+    std::cout << "Out of bounds error in SimulationEngine::getIndex(int x, int y)!\n y: " << y << ", x: " << x << ", this->height: " << this->height << ", this->width: " << this->width + ".\n";
     throw std::out_of_range("Index out of bounds");
 }
 

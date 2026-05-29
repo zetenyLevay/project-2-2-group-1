@@ -47,15 +47,15 @@ void LocalCUDAEngine::initializeCuda() {
     cudaMalloc(&this->f_dst, bytes);
 }
 
-LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource) : SimulationEngine(width, height), n_vals(9 * cells) {
+LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource) : SimulationEngine(w, h), n_vals(9 * cells) {
     this->initializeCuda();
 
     auto initialState = std::make_unique<SimulationState>();
 
-    initialState->width = width;
-    initialState->height = height;
+    initialState->width = w;
+    initialState->height = h;
 
-    auto cells = initialState->cells = width * height;
+    auto cells = initialState->cells = w * h;
 
     initialState->grid = initialState->cells;
 
