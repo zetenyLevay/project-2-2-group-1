@@ -5,8 +5,11 @@ include(CheckLanguage)
 check_language(CUDA)
 
 if(CMAKE_CUDA_COMPILER)
+    message("CUDA enabled.")
     enable_language(CUDA)
     add_compile_definitions(CUDA_AVAILABLE=1)
+else()
+    message("CUDA disabled.")
 endif()
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
