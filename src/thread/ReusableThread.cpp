@@ -121,7 +121,7 @@ void ReusableThread::threadMain() {
     }
 
     const SimulationState* previousState = this->buffers.getMostRecent();
-    std::__1::unique_ptr<SimulationState>& nextState = this->buffers.getNext();
+    std::unique_ptr<SimulationState>& nextState = this->buffers.getNext();
     task(*previousState, *nextState);
 
     stateMutex.lock();
