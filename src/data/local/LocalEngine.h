@@ -4,23 +4,24 @@
 #include "../SimulationEngine.h"
 
 class LocalEngine : public SimulationEngine {
-public:
-    LocalEngine(int w, int h, bool constantHeatSource);
-    LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory);
+    public:
+        LocalEngine(int w, int h, bool constantHeatSource);
+        LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory);
 
-    // Step foward one frame
-    void stepFoward();
+        // Step foward one frame
+        void stepFoward();
 
-    void stepBack();
+        void stepBack();
 
-    void seekTo(int step);
+        void seekTo(int step);
 
-    double getTotalEnergy() const;
+        double getTotalEnergy() const;
 
-    // Physics functions
-    void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, const Grid &gridOld);
-    std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-    void Stream(Grid &gridOld, Grid &gridNew);
+    private:
+        // Physics functions
+        void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, const Grid &gridOld);
+        std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
+        void Stream(Grid &gridOld, Grid &gridNew);
 };
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
