@@ -78,12 +78,22 @@ add_library(simulation_logic
     src/main/main.h
 )
 
+if(CMAKE_CUDA_COMPILER)
+    set(CUDA_SOURCES
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cu
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
+    )
+else()
+    set(CUDA_SOURCES "")
+endif()
+
 add_executable(project_2_2_group_1
     src/main/main.cpp
     src/ui/ui.cpp
     src/ui/ui.h
     ${IMGUI_SOURCES}
     ${IMPLOT_SOURCES}
+    ${CUDA_SOURCES}
 )
 
 # Link everything together for the main app
@@ -91,38 +101,6 @@ target_link_libraries(project_2_2_group_1
     simulation_logic 
     glfw 
     OpenGL::GL 
-    asio 
-    websocketpp
+    asio
     Threads::Threads
 )
-
-# Windows-specific networking libraries
-if(WIN32)
-    target_link_libraries(project_2_2_group_1 ws2_32 wsock32)
-endif()
-
-# Testing
-enable_testing()
-add_executable(test_stream tests/test_stream.cpp)
-# The test only links the math and network, skipping the heavy UI stuff
-target_link_libraries(test_stream simulation_logic asio websocketpp Threads::Threads)
-
-# Windows-specific networking libraries for tests
-if(WIN32)
-    target_link_libraries(test_stream ws2_32 wsock32)
-endif()
-add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
-
-
-if(CMAKE_CUDA_COMPILER)
-    add_executable(
-        src/data/local/gpu/CUDA/LocalCUDAEngine.cu
-        src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
-    )
-
-    set_target_properties(CudaBenchmark PROPERTIES
-        CUDA_STANDARD 17
-    )
-
-    target_include_directories(CudaBenchmark PRIVATE src/main)
-endif()

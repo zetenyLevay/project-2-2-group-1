@@ -9,37 +9,6 @@
 #include <memory>
 #include <string>
 
-#include <websocketpp/config/asio_no_tls.hpp>
-#include <websocketpp/server.hpp>
-
-typedef websocketpp::server<websocketpp::config::asio> server;
-
-// Main Writer: Gecenio
-// Reviewer: 
-// Contributers: 
-void runWebSocketServer(LocalEngine& engine) {
-    server ws_server;
-    ws_server.clear_access_channels(websocketpp::log::alevel::all);
-    ws_server.init_asio();
-
-    ws_server.set_message_handler([&](websocketpp::connection_hdl hdl, server::message_ptr msg) {
-        if (msg->get_payload() == "NEXT_FRAME") {
-            // Advance the physics by one frame
-            engine.stepFoward();
-
-            auto state = engine.getState();
-            
-            // Send updated temperatures
-            ws_server.send(hdl, state->temperatures.data(), state->temperatures.size() * sizeof(double), websocketpp::frame::opcode::binary);
-        }
-    });
-
-    std::cout << "Starting LBM Physics Server on ws://localhost:8080..." << std::endl;
-    ws_server.listen(8080);
-    ws_server.start_accept();
-    ws_server.run(); 
-}
-
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Kristian
