@@ -31,9 +31,10 @@ class LocalCUDAEngine : public SimulationEngine {
         void stream();
         void unpack(Grid& grid) const;
 
-        void initCudaLattice();
         void initializeCuda();
 };
+
+void initCudaLattice();
 
 __global__ void collisionKernel(int height, int width,
                                 double tauT, double TempAvg, double tauF,
