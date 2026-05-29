@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../thread/ReusableThread.h"
 #include "../../../SimulationEngine.h"
 
 class LocalCUDAEngine : public SimulationEngine {
@@ -28,7 +29,7 @@ class LocalCUDAEngine : public SimulationEngine {
         void pack(const Grid& grid);
         void collision(const double tauT, const double TempAvg, const double tauF);
         void stream();
-        void unpack(Grid& grid);
+        void unpack(Grid& grid) const;
 
         void initCudaLattice();
         void initializeCuda();

@@ -1,6 +1,7 @@
 #if CUDA_AVAILABLE == 1
 
 #include "./LocalCUDAEngine.cuh"
+#include <numeric>
 
 // D2Q9 lattice constants in constant memory
 // Those are cached and broadcasted to all threads
@@ -281,10 +282,10 @@ void LocalCUDAEngine::stepFoward() {
             }
         }
 
-        this->pack(previousState->grid);
-        this->collision(previousState->tauT, previousState->TempAvg, previousState->tauF);
+        this->pack(previousState.grid);
+        this->collision(previousState.tauT, previousState.TempAvg, previousState.tauF);
         this->stream();
-        this->unpack(nextState->grid);
+        this->unpack(nextState.grid);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;

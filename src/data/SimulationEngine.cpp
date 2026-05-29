@@ -27,7 +27,7 @@ const SimulationState* SimulationEngine::getState() {
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin
-const int SimulationEngine::getIndex(int x, int y) {
+int SimulationEngine::getIndex(int x, int y) {
     if(y>=0 && y<height)
     {
         if(x>=0 && x<width)
