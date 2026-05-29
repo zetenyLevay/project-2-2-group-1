@@ -34,7 +34,7 @@ void initCudaLattice() {
     cudaMemcpyToSymbol(d_cs2,     &h_cs2,    sizeof(double));
 }
 
-void initializeCuda() {
+void LocalCUDAEngine::initializeCuda() {
     initCudaLattice();
     
     size_t bytes = this->n_vals * sizeof(double);
@@ -47,6 +47,8 @@ void initializeCuda() {
 }
 
 LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource) : SimulationEngine(width, height), n_vals(9 * cells) {
+    this->initializeCuda();
+
     auto initialState = std::make_unique<SimulationState>();
 
     initialState->width = width;
@@ -92,7 +94,7 @@ LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource) : Simula
 }
 
 LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h), n_vals(9 * cells) {
-    initializeCuda();
+    this->initializeCuda();
 
     this->history = std::move(initialHistory);
     this->thread = std::make_unique<ReusableThread>(std::move(initialState));
@@ -104,7 +106,7 @@ LocalCUDAEngine::~LocalCUDAEngine() {
     cudaFree(this->g_dst); cudaFree(this->f_dst);
 }
 
-void pack(const Grid& grid) {
+void LocalCUDAEngine::pack(const Grid& grid) {
     for (int d = 0; d < 9; ++d) {
         cudaMemcpy(this->g_src + d * this->cells, grid.g[d].data(), this->cells * sizeof(double), cudaMemcpyHostToDevice);
         cudaMemcpy(this->f_src + d * this->cells, grid.f[d].data(), this->cells * sizeof(double), cudaMemcpyHostToDevice);
@@ -231,14 +233,14 @@ void LocalCUDAEngine::collision(const double tauT, const double TempAvg, const d
     }
 }
 
-void stream() {
+void LocalCUDAEngine::stream() {
     dim3 block(16, 16);
-    dim3 grid((width + block.x - 1) / block.x,
-              (height + block.y - 1) / block.y);
+    dim3 grid((this->width + block.x - 1) / block.x,
+              (this->height + block.y - 1) / block.y);
 
-    streamKernel<<<grid, block>>>(height, width,
-                                  g_dst, f_dst,
-                                  g_mid, f_mid);
+    streamKernel<<<grid, block>>>(this->height, this->width,
+                                  this->g_dst, this->f_dst,
+                                  this->g_mid, this->f_mid);
 
     cudaError_t err = cudaDeviceSynchronize();
 
@@ -248,7 +250,7 @@ void stream() {
     }
 }
 
-void CudaEngine::unpack(Grid& grid) const {
+void LocalCUDAEngine::unpack(Grid& grid) const {
     for (int d = 0; d < 9; ++d) {
         cudaMemcpy(grid.g[d].data(), g_dst + d * cells, cells * sizeof(double), cudaMemcpyDeviceToHost);
         cudaMemcpy(grid.f[d].data(), f_dst + d * cells, cells * sizeof(double), cudaMemcpyDeviceToHost);
@@ -279,10 +281,10 @@ void LocalCUDAEngine::stepFoward() {
             }
         }
 
-        pack(previousState->grid);
-        collision(previousState->tauT, previousState->TempAvg, previousState->tauF);
-        stream();
-        unpack(nextState->grid);
+        this->pack(previousState->grid);
+        this->collision(previousState->tauT, previousState->TempAvg, previousState->tauF);
+        this->stream();
+        this->unpack(nextState->grid);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;

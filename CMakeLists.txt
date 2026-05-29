@@ -83,6 +83,8 @@ if(CMAKE_CUDA_COMPILER)
         src/data/local/gpu/CUDA/LocalCUDAEngine.cu
         src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
     )
+    
+    set_source_files_properties(src/ui/ui.cpp PROPERTIES LANGUAGE CUDA)
 else()
     set(CUDA_SOURCES "")
 endif()

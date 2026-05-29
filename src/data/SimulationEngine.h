@@ -49,7 +49,7 @@ public:
 
     SimulationEngine(int w, int h);
 
-    const int getIndex(int x, int y);
+    int getIndex(int x, int y);
 
     virtual ~SimulationEngine();
 
