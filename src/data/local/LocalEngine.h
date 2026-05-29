@@ -23,6 +23,3 @@ class LocalEngine : public SimulationEngine {
         std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
         void Stream(Grid &gridOld, Grid &gridNew);
 };
-
-std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
-bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath);

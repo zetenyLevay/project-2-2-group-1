@@ -43,3 +43,48 @@ const SimulationHistory* SimulationEngine::getReadOnlyHistory() {
 }
 
 SimulationEngine::~SimulationEngine() = default;
+
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers: 
+bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath) {
+    std::filesystem::path pathObj(filepath);
+    std::filesystem::path dir = pathObj.parent_path();
+
+    if (!dir.empty() && !std::filesystem::exists(dir)) {
+        std::filesystem::create_directories(dir);
+        std::cout << "Created missing saves folder" << std::endl;
+    }
+
+    std::ofstream out(filepath, std::ios::binary);
+    if (!out.is_open()) return false;
+
+    // Write width and height
+    out.write(reinterpret_cast<const char*>(&state.width), sizeof(state.width));
+    out.write(reinterpret_cast<const char*>(&state.height), sizeof(state.height));
+
+    // Write whether the heat is constant
+    out.write(reinterpret_cast<const char*>(&state.isConstantHeatSource), sizeof(state.isConstantHeatSource));
+
+    // Write history length
+    size_t history_count = history->time_history.size();
+    out.write(reinterpret_cast<const char*>(&history_count), sizeof(history_count));
+
+    // Write basic history information
+    out.write(reinterpret_cast<const char*>(history->time_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->max_temp_history.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->min_temp_history.data()), history_count * sizeof(double));
+
+    // Write temperature history
+    for (size_t i = 0; i < history_count; ++i) {
+        out.write(reinterpret_cast<const char*>(history->temperature_history[i].data()), state.cells * sizeof(double));
+    }
+
+    // Get most recent grid
+    for (int d = 0; d < 9; ++d) {
+        out.write(reinterpret_cast<const char*>(state.grid.g[d].data()), state.cells * sizeof(double));
+    }
+
+    out.close();
+    return true;
+}

@@ -1,9 +1,7 @@
 #include "LocalEngine.h"
 #include "../../thread/ReusableThread.h"
 #include <numeric>
-#include <fstream>
 #include <iostream>
-#include <filesystem>
 
 // Initialized on main thread
 // Main Writer: Berke/Kristian 
@@ -283,105 +281,4 @@ std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int
             uy/=density;
         }
     return {density, ux, uy};
-}
-
-// Main Writer: Kristian
-// Reviewer: 
-// Contributers: 
-std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
-    std::ifstream in(filepath, std::ios::binary);
-    if (!in.is_open()) {
-        std::cerr << "Failed to open file: " << filepath << std::endl;
-        return nullptr;
-    }
-
-    // Width and Height
-    int w, h;
-    in.read(reinterpret_cast<char*>(&w), sizeof(w));
-    in.read(reinterpret_cast<char*>(&h), sizeof(h));
-
-    bool constantHeat;
-    in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
-
-    std::unique_ptr<SimulationState> state = std::make_unique<SimulationState>();
-    std::unique_ptr<SimulationHistory> history = std::make_unique<SimulationHistory>();
-
-    // Get history length
-    size_t history_count;
-    in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
-
-    // Read basic history information
-    history->time_history.resize(history_count);
-    history->max_temp_history.resize(history_count);
-    history->min_temp_history.resize(history_count);
-
-    in.read(reinterpret_cast<char*>(history->time_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(history->max_temp_history.data()), history_count * sizeof(double));
-    in.read(reinterpret_cast<char*>(history->min_temp_history.data()), history_count * sizeof(double));
-
-    // Get full temperature history
-    history->temperature_history.resize(history_count, std::vector<double>(state->cells));
-    for (size_t i = 0; i < history_count; ++i) {
-        in.read(reinterpret_cast<char*>(history->temperature_history[i].data()), state->cells * sizeof(double));
-    }
-
-
-    // Write most recent grid
-    for (int d = 0; d < 9; ++d) {
-        in.read(reinterpret_cast<char*>(state->grid.g[d].data()), state->cells * sizeof(double));
-    }
-
-    // Go to the last frame of the sim
-    if (history_count > 0) {
-        state->current_step = history->time_history.back();
-        state->temperatures = history->temperature_history.back();
-    }
-
-    in.close();
-    return std::make_unique<LocalEngine>(w, h, constantHeat, std::move(state), std::move(history));
-}
-
-// Main Writer: Kristian
-// Reviewer: 
-// Contributers: 
-bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath) {
-    std::filesystem::path pathObj(filepath);
-    std::filesystem::path dir = pathObj.parent_path();
-
-    if (!dir.empty() && !std::filesystem::exists(dir)) {
-        std::filesystem::create_directories(dir);
-        std::cout << "Created missing saves folder" << std::endl;
-    }
-
-    std::ofstream out(filepath, std::ios::binary);
-    if (!out.is_open()) return false;
-
-    // Write width and height
-    out.write(reinterpret_cast<const char*>(&state.width), sizeof(state.width));
-    out.write(reinterpret_cast<const char*>(&state.height), sizeof(state.height));
-
-    // Write whether the heat is constant
-    out.write(reinterpret_cast<const char*>(&state.isConstantHeatSource), sizeof(state.isConstantHeatSource));
-
-    // Write history length
-    size_t history_count = history->time_history.size();
-    out.write(reinterpret_cast<const char*>(&history_count), sizeof(history_count));
-
-    // Write basic history information
-    out.write(reinterpret_cast<const char*>(history->time_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(history->max_temp_history.data()), history_count * sizeof(double));
-    out.write(reinterpret_cast<const char*>(history->min_temp_history.data()), history_count * sizeof(double));
-
-    // Write temperature history
-    for (size_t i = 0; i < history_count; ++i) {
-        out.write(reinterpret_cast<const char*>(history->temperature_history[i].data()), state.cells * sizeof(double));
-    }
-
-    // Get most recent grid
-    for (int d = 0; d < 9; ++d) {
-        out.write(reinterpret_cast<const char*>(state.grid.g[d].data()), state.cells * sizeof(double));
-    }
-
-    out.close();
-    return true;
 }

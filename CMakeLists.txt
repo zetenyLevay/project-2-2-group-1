@@ -10,7 +10,7 @@ if(CMAKE_CUDA_COMPILER)
 endif()
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
-set(CMAKE_CXX_STANDARD 17) 
+set(CMAKE_CXX_STANDARD 20) 
 
 find_package(Threads REQUIRED) # For WebSocket background threading
 find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration

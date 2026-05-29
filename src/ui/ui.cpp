@@ -16,11 +16,23 @@
 #include "main.h"
 #include "../thread/ReusableThread.h"
 
+#if CUDA_AVAILABLE == 1
+
+#include "../data/local/gpu/CUDA/LocalCUDAEngine.h"
+
+#endif
+
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
 std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSource) {
 
     switch (currentSource) {
+        case DataSource::LOCAL_CUDA:
+            #if CUDA_AVAILABLE == 1
+                return std::make_unique<LocalCUDAEngine>(w, h, constantHeatSource);
+            #else
+                std::cout << "Cuda requested but is not enabled in this build. This is a bug. CPU processing will be used.\n";
+            #endif
         case DataSource::LOCAL:
             return std::make_unique<LocalEngine>(w, h, constantHeatSource);
         default:
@@ -368,18 +380,27 @@ void launchGui() {
             if (!f.result().empty()) {
                 std::string selectedPath = f.result()[0];
 
+                std::unique_ptr<SimulationEngine> loadedEngine;
                 switch (currentSource) {
+                    case DataSource::LOCAL_CUDA:
+                        #if CUDA_AVAILABLE == 1
+                            loadedEngine = loadSimulation<LocalCUDAEngine>(selectedPath);
+                        #else
+                            std::cout << "Cuda requested but is not enabled in this build. This is a bug. CPU processing will be used.\n";
+                        #endif
                     case DataSource::LOCAL:
-                        engine->thread->terminate();
-                        auto loadedEngine = loadLocalSimulation(selectedPath);
-                        if (loadedEngine) {
-                            engine = std::move(loadedEngine);
-                            history = engine->getReadOnlyHistory();
-                            MAX_TEMP = history->max_temp_history.front();
-                            scaleMax = MAX_TEMP * 1.1;
+                        loadedEngine = loadSimulation<LocalEngine>(selectedPath);
+                }
 
-                            std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
-                        }
+                if (loadedEngine) {
+                    engine->thread->terminate();
+
+                    engine = std::move(loadedEngine);
+                    history = engine->getReadOnlyHistory();
+                    MAX_TEMP = history->max_temp_history.front();
+                    scaleMax = MAX_TEMP * 1.1;
+
+                    std::cout << "Loaded new simulation from: " << selectedPath << std::endl;
                 }
             }
         }

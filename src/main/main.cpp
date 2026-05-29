@@ -40,9 +40,6 @@ void runWebSocketServer(LocalEngine& engine) {
     ws_server.run(); 
 }
 
-// relaxation time for temperature spread
-
-
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Kristian
@@ -70,7 +67,12 @@ int main(int argc, char* argv[]) {
     else {
         // Making this default but later it should be opened with .\project_2_2_group_1.exe --ui
         std::cout << "Booting Desktop UI..." << std::endl;
+
+        #if CUDA_AVAILABLE == 1
+        startGui(DataSource::LOCAL_CUDA);
+        #else
         startGui(DataSource::LOCAL);
+        #endif
     }
     return 0;
 }
