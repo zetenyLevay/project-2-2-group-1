@@ -18,7 +18,7 @@
 
 #if CUDA_AVAILABLE == 1
 
-#include "../data/local/gpu/CUDA/LocalCUDAEngine.h"
+#include "../data/local/gpu/CUDA/LocalCUDAEngine.cuh"
 
 #endif
 
