@@ -32,7 +32,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     // Set heatsources
     // (x,y) = (1,0); the radiator's position
-    int radX = 40;
+    int radX = 0;
     int radY = 0;
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
@@ -141,7 +141,7 @@ void LocalEngine::stepFoward() {
         if (state.isConstantHeatSource) {
             for (int idx : state.heatSources) {
                 if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.05;
+                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
                 }
                 for (int d = 0; d < 9; ++d) {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];

@@ -10,8 +10,8 @@
 #include <cmath>
 
 // Default Width and Height
-inline int defaultWidth = 100;
-inline int defaultHeight = 100;
+inline int defaultWidth = 500;
+inline int defaultHeight = 500;
 
 // Main Writer: Zétény
 // Physics constants
