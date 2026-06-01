@@ -118,7 +118,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
             int wallY = wallIdx / width;
 
             // Distance
-            double dist = std::sqrt(std::pow(radX - wallX, 2) + std::pow(radY - wallY, 2));
+            double dist = std::sqrt(((radX - wallX) * (radX - wallX)) + ((radY - wallY) * (radY - wallY)));
 
             // Radiation intensity falls linearly with distance
             if (dist > 0) {
