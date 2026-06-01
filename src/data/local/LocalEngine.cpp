@@ -100,7 +100,7 @@ void LocalEngine::stepFoward() {
                 if(state.temperatures[idx]<MAX_TEMP){
                     state.temperatures[idx] = state.temperatures[idx]+0.1;
                 }
-                
+
                 for (int d = 0; d < 9; ++d) {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
                     state.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
