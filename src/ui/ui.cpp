@@ -200,6 +200,8 @@ void launchGui() {
             // Radiator 
             int radWidth = state.width * 0.1;
             int radHeight = state.height * 0.4;
+            double radX = 0;
+            double radY = 0;
             double valveR = radWidth / 8;
             double valveX = radX + (radWidth / 2);
             double valveY = radY + radHeight - (2 * valveR) - 1;
@@ -497,11 +499,11 @@ void launchGui() {
 
         double hotSpot = history.max_temp_history[state.current_step];
         double coldSpot = history.min_temp_history[state.current_step];
-        double averageTemp = state.TempAvg;
+        double estMiddle = (hotSpot + coldSpot) / 2;
 
         // Live real data
         ImGui::Text("Hot Spot: %.2f C", hotSpot);
-        ImGui::Text("Average Temperature: %.2f C", averageTemp);
+        ImGui::Text("Average Temperature: %.2f C", estMiddle);
         ImGui::Text("Cold Spot: %.2f C", coldSpot);
 
 
@@ -587,14 +589,8 @@ void launchGui() {
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
-        ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
-        ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
-        double convection = history.convectionOutput[state.current_step];
-        double radiation = history.radiationOutput[state.current_step];
-        double ratioR = (radiation / (radiation + convection)) * 100;
-        ImGui::Text("Convection this step: %.4f", convection);
-        ImGui::Text("Radiation this step: %.4f", radiation);
-        ImGui::Text("Percentage Radiation: %.2f", ratioR);
+
+
 
         ImGui::End();
 

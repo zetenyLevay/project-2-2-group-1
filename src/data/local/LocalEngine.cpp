@@ -32,9 +32,10 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     // Set heatsources
     // (x,y) = (1,0); the radiator's position
+    int radX = 0;
+    int radY = 0;
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
-
             initialState->heatSources.push_back(getIndex(x,y));
         }
     }
@@ -46,12 +47,10 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->TempAvg = 0.0;
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, ROOM_TEMP);
-    initialState->isRad.resize(cells, false);
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
         initialState->temperatures[idx] = ROOM_TEMP;
-        initialState->isRad[idx] = true;
     }
 
     // Initialize Grid
@@ -72,55 +71,6 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     history.max_temp_history.push_back(ROOM_TEMP);
     history.min_temp_history.push_back(ROOM_TEMP);
     history.temperature_history.push_back(initialState->temperatures);
-    history.convectionOutput.push_back(0.0);
-    history.radiationOutput.push_back(0.0);
-
-    // Radiation Setup
-    // Get boundary Cells
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
-                // Ignore radiator cells
-                if (!initialState->isRad[getIndex(x,y)]) {
-                    initialState->boundaryCells.push_back(getIndex(x,y));
-                }
-            }
-        }
-    }
-
-    // Calculate View Factors (For each radiator cell, the distance from it to the wall)
-    for (int radIdx : initialState->heatSources) {
-        int radX = radIdx % width;
-        int radY = radIdx / width;
-
-        double totalInverseDistance = 0.0;
-        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
-
-        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
-            int wallIdx = initialState->boundaryCells[i];
-            int wallX = wallIdx % width;
-            int wallY = wallIdx / width;
-
-            // Distance
-            double dist = std::sqrt(std::pow(radX - wallX, 2) + std::pow(radY - wallY, 2));
-
-            // Radiation intensity falls linearly with distance
-            if (dist > 0) {
-                temp[i] = 1.0 / dist;
-                totalInverseDistance += temp[i];
-            }
-        }
-
-        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
-            if (temp[i] > 0) {
-                ViewFactor vf;
-                vf.sourceIdx = radIdx;
-                vf.targetIdx = initialState->boundaryCells[i];
-                vf.factor = temp[i] / totalInverseDistance;
-                initialState->viewFactors.push_back(vf);
-            }
-        }
-    }
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(initialState);
@@ -158,18 +108,14 @@ void LocalEngine::stepFoward() {
             }
         }
 
-        double previousEnergy = state.TempAvg * cells;
         Grid gridTemp(state.cells);
-
-        // Physics steps
-        this->Radiation(state);
         this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
-        this->Stream(gridTemp, state.grid, state.isRad);
+
+        this->Stream(gridTemp, state.grid);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
         double tempAvgLocal = 0.0;
-        
         #ifdef _OPENMP
         #pragma omp parallel for reduction(+:tempAvgLocal) \
             reduction(max:current_max) \
@@ -201,8 +147,6 @@ void LocalEngine::stepFoward() {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
                     state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
                 }
-        // Get the total output
-
 
                 if (state.temperatures[idx] > current_max) {
                     current_max = state.temperatures[idx];
@@ -211,18 +155,12 @@ void LocalEngine::stepFoward() {
 
         }
 
-        double currentEnergy = state.TempAvg * cells;
-        double totalEnergyOutput = currentEnergy - previousEnergy;
-        // Get convection
-        double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
-        history.convectionOutput.push_back(convectionThisStep);
-
         state.current_step++;
 
-        history.time_history.push_back(state.current_step);
-        history.max_temp_history.push_back(current_max);
-        history.min_temp_history.push_back(current_min);
-        history.temperature_history.push_back(state.temperatures);
+            history.time_history.push_back(state.current_step);
+          history.max_temp_history.push_back(current_max);
+          history.min_temp_history.push_back(current_min);
+          history.temperature_history.push_back(state.temperatures);
 
 
 
@@ -343,7 +281,7 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
     const int n_cells = cells;
     const int w = width;
     const int h = height;
@@ -372,8 +310,6 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad)
         for (int x = 0; x < w; x++) {
             int currentIndex = y * w + x;
 
-            if (isRad[currentIndex]) continue;
-
             // Streaming each direction
             // In SoA the main idea is to write
             // from the old grid current index
@@ -381,63 +317,22 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad)
             for (int d = 0; d < 9; ++d) {
                 int sourceX = x - cx[d];
                 int sourceY = y - cy[d];
-                int oppositeDir = inv[d];
 
                 // check if the next x and y are in bound
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < w && sourceY < h) {
                     int sourceIndex = sourceY * w + sourceX;
-
-                    if (isRad[sourceIndex]) {
-                        g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + sourceIndex] * 2.0 * weights[d] * MAX_TEMP;
-                        f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + sourceIndex];
-                    }
-                    else {
-                        g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
-                        f_new[d * n_cells + currentIndex] = f_old[d * n_cells + sourceIndex];
-                    }
-
-
+                    g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
+                    f_new[d * n_cells + currentIndex] = f_old[d * n_cells + sourceIndex];
                 }
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
-
+                    int oppositeDir = inv[d];
                     g_new[d * n_cells + currentIndex] = g_old[oppositeDir * n_cells + currentIndex];
                     f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + currentIndex];
                 }
             }
         }
     }
-}
-
-// Main Writer: Kristian
-// Reviewer:
-// Contributers:
-void LocalEngine::Radiation(SimulationState& state) {
-    double radiationThisStep = 0.0;
-    for (const auto& vf : state.viewFactors) {
-        double tSource = state.temperatures[vf.sourceIdx];
-        double tTarget = state.temperatures[vf.targetIdx];
-
-        // Covert to kelvin
-        double tSourceK = tSource + 273.15;
-        double tTargetK = tTarget + 273.15;
-
-        // Stefan-Boltzmann law
-        double heatFlux = lattice_stefan_boltzmann * vf.factor * (std::pow(tSourceK, 4) - std::pow(tTargetK, 4));
-
-        // Accounting for walls
-        double wallHeatCapacity = 50.0;
-        heatFlux = heatFlux / wallHeatCapacity;
-
-        radiationThisStep += heatFlux;
-
-        // Add the heat
-        for (int d = 0; d < 9; ++d) {
-            state.grid.g[d*state.cells + vf.targetIdx] += weights[d] * heatFlux;
-        }
-    }
-    // Helper to tune radiation
-    history.radiationOutput.push_back(radiationThisStep);
 }
 
 // Main Writer: Cosmin
