@@ -115,6 +115,26 @@ void LocalEngine::stepFoward() {
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
+        
+        //update heatSource back it its oringinal temperature
+        //doing it twice to ensure that the temperature reamins consitent and there is no flow
+        if (state.isConstantHeatSource) {
+            for (int idx : state.heatSources) {
+                if(state.temperatures[idx]<MAX_TEMP){
+                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
+                }
+                for (int d = 0; d < 9; ++d) {
+                    state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
+                    state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                }
+
+                if (state.temperatures[idx] > current_max) {
+                    current_max = state.temperatures[idx];
+                }
+            }
+
+        }
+
         double tempAvgLocal = 0.0;
         #ifdef _OPENMP
         #pragma omp parallel for reduction(+:tempAvgLocal) \
@@ -135,25 +155,6 @@ void LocalEngine::stepFoward() {
             if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
         }
         state.TempAvg = tempAvgLocal / cells;
-
-        //update heatSource back it its oringinal temperature
-        //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        if (state.isConstantHeatSource) {
-            for (int idx : state.heatSources) {
-                if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
-                }
-                for (int d = 0; d < 9; ++d) {
-                    state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
-                    state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-                }
-
-                if (state.temperatures[idx] > current_max) {
-                    current_max = state.temperatures[idx];
-                }
-            }
-
-        }
 
         state.current_step++;
 

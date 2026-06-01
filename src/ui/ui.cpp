@@ -499,11 +499,11 @@ void launchGui() {
 
         double hotSpot = history.max_temp_history[state.current_step];
         double coldSpot = history.min_temp_history[state.current_step];
-        double estMiddle = (hotSpot + coldSpot) / 2;
+        double average = state.TempAvg;
 
         // Live real data
         ImGui::Text("Hot Spot: %.2f C", hotSpot);
-        ImGui::Text("Average Temperature: %.2f C", estMiddle);
+        ImGui::Text("Average Temperature: %.2f C", average);
         ImGui::Text("Cold Spot: %.2f C", coldSpot);
 
 
