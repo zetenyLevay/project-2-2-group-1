@@ -159,7 +159,6 @@ void LocalEngine::stepFoward() {
         }
 
         double previousEnergy = state.TempAvg * cells;
-
         Grid gridTemp(state.cells);
 
         // Physics steps
@@ -170,6 +169,7 @@ void LocalEngine::stepFoward() {
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
         double tempAvgLocal = 0.0;
+        
         #ifdef _OPENMP
         #pragma omp parallel for reduction(+:tempAvgLocal) \
             reduction(max:current_max) \
@@ -202,8 +202,7 @@ void LocalEngine::stepFoward() {
                     state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
                 }
         // Get the total output
-        double currentEnergy = state.TempAvg * cells;
-        double totalEnergyOutput = currentEnergy - previousEnergy;
+
 
                 if (state.temperatures[idx] > current_max) {
                     current_max = state.temperatures[idx];
@@ -211,16 +210,19 @@ void LocalEngine::stepFoward() {
             }
 
         }
+
+        double currentEnergy = state.TempAvg * cells;
+        double totalEnergyOutput = currentEnergy - previousEnergy;
         // Get convection
         double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
         history.convectionOutput.push_back(convectionThisStep);
 
         state.current_step++;
 
-            history.time_history.push_back(state.current_step);
-          history.max_temp_history.push_back(current_max);
-          history.min_temp_history.push_back(current_min);
-          history.temperature_history.push_back(state.temperatures);
+        history.time_history.push_back(state.current_step);
+        history.max_temp_history.push_back(current_max);
+        history.min_temp_history.push_back(current_min);
+        history.temperature_history.push_back(state.temperatures);
 
 
 
@@ -430,8 +432,8 @@ void LocalEngine::Radiation(SimulationState& state) {
         radiationThisStep += heatFlux;
 
         // Add the heat
-        for (int i = 0; i < 9; ++i) {
-            state.grid.g[i][vf.targetIdx] += weights[i] * heatFlux;
+        for (int d = 0; d < 9; ++d) {
+            state.grid.g[d*state.cells + vf.targetIdx] += weights[d] * heatFlux;
         }
     }
     // Helper to tune radiation
