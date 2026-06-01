@@ -18,7 +18,7 @@ inline int defaultHeight = 500;
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 55.0;
 const double ROOM_TEMP = 20.0;
-const int radX = 1;
+const int radX = 0;
 const int radY = 0;
 
 #pragma omp declare target
