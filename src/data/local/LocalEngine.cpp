@@ -63,6 +63,55 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     history.max_temp_history.push_back(MAX_TEMP);
     history.min_temp_history.push_back(ROOM_TEMP);
     history.temperature_history.push_back(initialState->temperatures);
+    history.convectionOutput.push_back(0.0);
+    history.radiationOutput.push_back(0.0);
+
+    // Radiation Setup
+    // Get boundary Cells
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
+                // Ignore radiator cells
+                if (!initialState->isRad[getIndex(x,y)]) {
+                    initialState->boundaryCells.push_back(getIndex(x,y));
+                }
+            }
+        }
+    }
+
+    // Calculate View Factors (For each radiator cell, the distance from it to the wall)
+    for (int radIdx : initialState->heatSources) {
+        int radX = radIdx % width;
+        int radY = radIdx / width;
+
+        double totalInverseDistance = 0.0;
+        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            int wallIdx = initialState->boundaryCells[i];
+            int wallX = wallIdx % width;
+            int wallY = wallIdx / width;
+
+            // Distance
+            double dist = std::sqrt(std::pow(radX - wallX, 2) + std::pow(radY - wallY, 2));
+
+            // Radiation intensity falls linearly with distance
+            if (dist > 0) {
+                temp[i] = 1.0 / dist;
+                totalInverseDistance += temp[i];
+            }
+        } 
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            if (temp[i] > 0) {
+                ViewFactor vf;
+                vf.sourceIdx = radIdx;
+                vf.targetIdx = initialState->boundaryCells[i];
+                vf.factor = temp[i] / totalInverseDistance;
+                initialState->viewFactors.push_back(vf);
+            }
+        }
+    }
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(initialState);
@@ -97,29 +146,17 @@ void LocalEngine::stepFoward() {
             }
         }
 
-        Grid gridTemp(state.cells);
-        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
+        double previousEnergy = state.TempAvg * cells;
 
+        Grid gridTemp(state.cells);
+
+        // Physics steps
+        this->Radiation(state);
+        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
         this->Stream(gridTemp, state.grid, state.isRad);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
-        state.TempAvg=0.0;
-        for (int i = 0; i < cells; i++) {
-            double temp = 0.0;
-
-            for (int d = 0; d < 9; ++d) {
-                temp += state.grid.g[d][i];
-            }
-            state.temperatures[i] = temp;
-            state.TempAvg = state.TempAvg + state.temperatures[i];
-
-            // Find Max and Min for the graph
-            if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
-            if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
-        }
-        state.TempAvg= state.TempAvg / cells;
-
         //update heatSource back it its oringinal temperature
         //doing it twice to ensure that the temperature reamins consitent and there is no flow
         if (state.isConstantHeatSource) {
@@ -134,8 +171,32 @@ void LocalEngine::stepFoward() {
                     current_max = state.temperatures[idx];
                 }
             }
-            
         }
+
+        // Get average temperature
+        state.TempAvg = 0.0;
+        for (int i = 0; i < cells; i++) {
+            double temp = 0.0;
+
+            for (int d = 0; d < 9; ++d) {
+                temp += state.grid.g[d][i];
+            }
+            state.temperatures[i] = temp;
+            state.TempAvg = state.TempAvg + state.temperatures[i];
+
+            // Find Max and Min for the graph
+            if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
+            if (state.temperatures[i] < current_min) current_min = state.temperatures[i];
+        }
+        state.TempAvg = state.TempAvg / cells;
+
+        // Get the total output
+        double currentEnergy = state.TempAvg * cells;
+        double totalEnergyOutput = currentEnergy - previousEnergy;
+
+        // Get convection
+        double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
+        history.convectionOutput.push_back(convectionThisStep);
 
         state.current_step++;
         history.time_history.push_back(state.current_step);
@@ -195,12 +256,10 @@ double LocalEngine::getTotalEnergy() const {
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld){
-
     //gridNew - output grid, gridOld - input grid
     //heat_spred - controls temperature update
 	// tempAvg - average temperature of the grid
 	// viscosity - controls the fluid movement update
-
 
     for (int y = 0; y < height; y++){
         for(int x = 0; x < width; x++){
@@ -229,6 +288,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             }
 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
+            // CHANGED BACK TO tauF and tauT SOMEONE CHECK THIS
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
                 //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
@@ -271,7 +331,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad)
                     if (isRad[sourceIndex]) {
                         // It hit the radiator
                         gridNew.f[d][currentIndex] = gridOld.f[oppositeDir][currentIndex];
-                        gridNew.g[d][currentIndex] = weights[d] * MAX_TEMP;
+                        gridNew.g[d][currentIndex] = -gridOld.g[oppositeDir][currentIndex] + 2.0 * weights[d] * MAX_TEMP;
                     }
                     else {
                         // Normal flow
@@ -288,6 +348,37 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad)
             }
         }
     }
+}
+
+// Main Writer: Kristian
+// Reviewer: 
+// Contributers: 
+void LocalEngine::Radiation(SimulationState& state) {
+    double radiationThisStep = 0.0;
+    for (const auto& vf : state.viewFactors) {
+        double tSource = state.temperatures[vf.sourceIdx];
+        double tTarget = state.temperatures[vf.targetIdx];
+
+        // Covert to kelvin
+        double tSourceK = tSource + 273.15;
+        double tTargetK = tTarget + 273.15;
+
+        // Stefan-Boltzmann law 
+        double heatFlux = lattice_stefan_boltzmann * vf.factor * (std::pow(tSourceK, 4) - std::pow(tTargetK, 4));
+
+        // Accounting for walls
+        double wallHeatCapacity = 50.0;
+        heatFlux = heatFlux / wallHeatCapacity;
+
+        radiationThisStep += heatFlux;
+
+        // Add the heat
+        for (int i = 0; i < 9; ++i) {
+            state.grid.g[i][vf.targetIdx] += weights[i] * heatFlux;
+        }
+    }
+    // Helper to tune radiation 
+    history.radiationOutput.push_back(radiationThisStep);
 }
 
 // Main Writer: Cosmin

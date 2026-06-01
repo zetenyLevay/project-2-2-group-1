@@ -8,6 +8,13 @@ struct SimulationState;
 #include <string>
 #include <memory>
 
+// Line between heat source and wall (used for calculating how radiation transfers)
+struct ViewFactor {
+    int sourceIdx;
+    int targetIdx;
+    double factor;
+};
+
 struct SimulationState {
     int width, height, cells;
     Grid grid;
@@ -17,6 +24,9 @@ struct SimulationState {
     std::vector<int> heatSources; 
     std::vector<bool> isRad;
     bool isConstantHeatSource;
+
+    std::vector<int> boundaryCells;
+    std::vector<ViewFactor> viewFactors;
     
     // Make grid default size 0.
     SimulationState(): grid(0) {}
@@ -36,6 +46,8 @@ struct SimulationHistory {
     std::vector<double> max_temp_history;
     std::vector<double> min_temp_history;
     std::vector<std::vector<double>> temperature_history;
+    std::vector<double> convectionOutput;
+    std::vector<double> radiationOutput;
 };
 
 class SimulationEngine {

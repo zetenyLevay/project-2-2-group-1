@@ -497,11 +497,11 @@ void launchGui() {
 
         double hotSpot = history.max_temp_history[state.current_step];
         double coldSpot = history.min_temp_history[state.current_step];
-        double estMiddle = (hotSpot + coldSpot) / 2;
+        double averageTemp = state.TempAvg;
 
         // Live real data
         ImGui::Text("Hot Spot: %.2f C", hotSpot);
-        ImGui::Text("Average Temperature: %.2f C", estMiddle);
+        ImGui::Text("Average Temperature: %.2f C", averageTemp);
         ImGui::Text("Cold Spot: %.2f C", coldSpot);
 
 
@@ -589,7 +589,12 @@ void launchGui() {
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
         ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
         ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
-
+        double convection = history.convectionOutput[state.current_step];
+        double radiation = history.radiationOutput[state.current_step];
+        double ratioR = (radiation / (radiation + convection)) * 100;
+        ImGui::Text("Convection this step: %.4f", convection);
+        ImGui::Text("Radiation this step: %.4f", radiation);
+        ImGui::Text("Percentage Radiation: %.2f", ratioR);
 
         ImGui::End();
 
