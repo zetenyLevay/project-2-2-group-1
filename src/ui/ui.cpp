@@ -144,14 +144,29 @@ void launchGui() {
 
         // Change room color
         ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.0f/255.0f, 0.0f/255.0f, 0.0f/255.0f, 1.0f));
+
+        // Apply the new color map for the heatmap and legend
+        ImPlot::PushColormap(ImPlotColormap_Jet);
+
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        ImVec2 plotTopRight;
+        float plotHeight = 0.0f;
+
+
         // We use -1.0f to make the plot fill the entire available window space
         if (ImPlot::BeginPlot("##HeatmapCanvas", ImVec2(-1.0f, -1.0f), ImPlotFlags_NoLegend | ImPlotFlags_NoMouseText)) {
-            
+
             // Hide the X and Y axes so it looks like a  2D canvas and not a graph
             ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
             
             // Force the plot to match the exact dimensions of the grid
             ImPlot::SetupAxesLimits(0, state.width, state.height, 0, ImGuiCond_Always);
+
+            // Getting position for legend
+            ImVec2 plotPos = ImPlot::GetPlotPos();
+            ImVec2 plotSize = ImPlot::GetPlotSize();
+            plotTopRight = ImVec2(plotPos.x + plotSize.x, plotPos.y);
+            plotHeight = plotSize.y;
 
             /*
             USED FOR TRANSPARENCY, DONT DELETE MIGHT USE LATER
@@ -167,9 +182,6 @@ void launchGui() {
                 transparentJet = ImPlot::AddColormap("Jet_Transparent", custom_colors, 128);
             }
             */
-
-            // Apply the new color map
-            ImPlot::PushColormap(ImPlotColormap_Jet); 
             
             // Draw the heatmap
             ImPlot::PlotHeatmap("##HeatData", 
@@ -188,8 +200,6 @@ void launchGui() {
             // Radiator 
             int radWidth = state.width * 0.1;
             int radHeight = state.height * 0.4;
-            double radX = 1;
-            double radY = 0;
             double valveR = radWidth / 8;
             double valveX = radX + (radWidth / 2);
             double valveY = radY + radHeight - (2 * valveR) - 1;
@@ -227,12 +237,24 @@ void launchGui() {
                 drawList->AddLine(grillLeft, grillRight, lineColor, lineWidth);
             }
 
-            ImPlot::PopColormap();
             ImPlot::EndPlot();
         }        
-        ImPlot::PopStyleColor();
         ImPlot::PopStyleVar();
 
+        // -- Legend --
+        // Set position of the legend
+        float legendW = avail.x * 0.05f;
+        float margin = avail.x * 0.005f;
+        ImVec2 legendPos = ImVec2(plotTopRight.x - legendW - margin, plotTopRight.y + margin);
+        ImGui::SetCursorScreenPos(legendPos);
+
+        // Create the legend
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+        ImPlot::ColormapScale("°C", ROOM_TEMP, MAX_TEMP, ImVec2(legendW, plotHeight * 0.3f));
+
+        ImGui::PopStyleColor();
+        ImPlot::PopStyleColor();
+        ImPlot::PopColormap();
         ImGui::End();
 
         // --- Simulation controls ---
@@ -475,11 +497,11 @@ void launchGui() {
 
         double hotSpot = history.max_temp_history[state.current_step];
         double coldSpot = history.min_temp_history[state.current_step];
-        double estMiddle = (hotSpot + coldSpot) / 2;
+        double averageTemp = state.TempAvg;
 
         // Live real data
         ImGui::Text("Hot Spot: %.2f C", hotSpot);
-        ImGui::Text("Average Temperature: %.2f C", estMiddle);
+        ImGui::Text("Average Temperature: %.2f C", averageTemp);
         ImGui::Text("Cold Spot: %.2f C", coldSpot);
 
 
@@ -565,8 +587,14 @@ void launchGui() {
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
-
-
+        ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
+        ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
+        double convection = history.convectionOutput[state.current_step];
+        double radiation = history.radiationOutput[state.current_step];
+        double ratioR = (radiation / (radiation + convection)) * 100;
+        ImGui::Text("Convection this step: %.4f", convection);
+        ImGui::Text("Radiation this step: %.4f", radiation);
+        ImGui::Text("Percentage Radiation: %.2f", ratioR);
 
         ImGui::End();
 

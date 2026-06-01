@@ -27,19 +27,19 @@ class LocalEngine : public SimulationEngine {
 public:
     LocalEngine(int w, int h, bool constantHeatSource);
 
-    // Step foward one frame
+    // Control Simulation functions
     void stepFoward();
-
     void stepBack();
-
     void seekTo(int step);
-
-    double getTotalEnergy() const;
 
     // Physics functions
     void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
+    void Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad);
+    void Radiation(SimulationState& state);
+
+    // Helper functions
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-    void Stream(Grid &gridOld, Grid &gridNew);
+    double getTotalEnergy() const;
 };
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);

@@ -16,8 +16,10 @@ inline int defaultHeight = 500;
 // Main Writer: Zétény
 // Physics constants
 // lb stands for lattice boltzmann unit
-inline double MAX_TEMP = 100.0;
+inline double MAX_TEMP = 55.0;
 const double ROOM_TEMP = 20.0;
+const int radX = 1;
+const int radY = 0;
 
 #pragma omp declare target
 const double room_height = 2.5; // in meters
@@ -33,13 +35,10 @@ const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_hei
 const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
 const double thermal_relaxation_time = 3*lattice_thermal_diffusivity+0.5;
 const double density_relaxation_time = 3*lattice_kinematic_viscosity+0.5;
+const double lattice_stefan_boltzmann = 1e-10;
 const double real_viscosity = 1.5e-5;// kinematic viscosity of air at 20c in real life (m2/s)
 const double delta_x = room_height/cells_height;
 const double seconds_per_step = lattice_kinematic_viscosity*((delta_x*delta_x)/real_viscosity);
-
-
-
-
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,-1,1};
