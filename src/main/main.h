@@ -10,13 +10,13 @@
 #include <cmath>
 
 // Default Width and Height
-inline int defaultWidth = 500;
-inline int defaultHeight = 500;
+inline int defaultWidth = 1000;
+inline int defaultHeight = 1000;
 
 // Main Writer: Zétény
 // Physics constants
 // lb stands for lattice boltzmann unit
-inline double MAX_TEMP = 100.0;
+inline double MAX_TEMP = 55.0;
 const double ROOM_TEMP = 20.0;
 
 #pragma omp declare target
