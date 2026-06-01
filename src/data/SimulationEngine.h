@@ -8,15 +8,28 @@ struct SimulationState;
 #include <string>
 #include <memory>
 
+// Line between heat source and wall (used for calculating how radiation transfers)
+struct ViewFactor {
+    int sourceIdx;
+    int targetIdx;
+    double factor;
+};
+
 struct SimulationState {
     int width, height, cells;
     Grid grid;
     std::vector<double> temperatures;
     int heatSourceW;
     int heatSourceH;
+    std::vector<bool> isRad;
     std::vector<int> heatSources;
     bool isConstantHeatSource;
-    
+
+    std::vector<int> boundaryCells;
+    std::vector<ViewFactor> viewFactors;
+    std::vector<std::vector<double>> localFluxCache;
+    std::vector<double> t4;
+
     // Make grid default size 0.
     SimulationState(): grid(0) {}
 

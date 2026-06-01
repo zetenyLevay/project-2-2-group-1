@@ -37,9 +37,11 @@ public:
     double getTotalEnergy() const;
 
     // Physics functions
+    void Radiation(SimulationState& state);
     void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
+    void Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state);
+
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-    void Stream(Grid &gridOld, Grid &gridNew);
 };
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
