@@ -21,8 +21,13 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     auto cells = initialState->cells = width * height;
 
+    int numThreads = 1;
+    #ifdef _OPENMP
+    numThreads = omp_get_max_threads();
+    #endif
+    initialState->localFluxCache.resize(numThreads, std::vector<double>(cells, 0.0));
+    initialState->t4.resize(cells, 0.0);
     initialState->grid = initialState->cells;
-
     initialState->current_step = 0;
     initialState->heat_spread = thermal_relaxation_time;
     initialState->viscosity = lattice_kinematic_viscosity;
@@ -31,9 +36,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->heatSourceH = height * 0.4;
 
     // Set heatsources
-    // (x,y) = (1,0); the radiator's position
-    int radX = 0;
-    int radY = 0;
+    // (x,y) = (0,0); the radiator's position
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
             initialState->heatSources.push_back(getIndex(x,y));
@@ -47,10 +50,12 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->TempAvg = 0.0;
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, ROOM_TEMP);
+    initialState->isRad.resize(cells, false);
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
         initialState->temperatures[idx] = ROOM_TEMP;
+        initialState->isRad[idx] = true;
     }
 
     // Initialize Grid
@@ -71,6 +76,67 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     history.max_temp_history.push_back(ROOM_TEMP);
     history.min_temp_history.push_back(ROOM_TEMP);
     history.temperature_history.push_back(initialState->temperatures);
+    history.convectionOutput.push_back(0.0);
+    history.radiationOutput.push_back(0.0);
+
+    std::vector<int> surfaceR;
+    for (int idx : initialState->heatSources) {
+        int rX = idx % width;
+        int rY = idx / width;
+
+        bool isSurface = ((rX == radX) || (rX == radX + initialState->heatSourceW -1) || (rY == radY) || (rY == radY + initialState->heatSourceH -1));
+
+        if (isSurface) {
+            surfaceR.push_back(idx);
+        }
+    }
+
+    // Radiation Setup
+    // Get boundary Cells
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
+                // Ignore radiator cells
+                if (!initialState->isRad[getIndex(x,y)]) {
+                    initialState->boundaryCells.push_back(getIndex(x,y));
+                }
+            }
+        }
+    }
+
+    // Calculate View Factors (For each radiator cell, the distance from it to the wall)
+    for (int radIdx : surfaceR) {
+        int radX = radIdx % width;
+        int radY = radIdx / width;
+
+        double totalInverseDistance = 0.0;
+        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            int wallIdx = initialState->boundaryCells[i];
+            int wallX = wallIdx % width;
+            int wallY = wallIdx / width;
+
+            // Distance
+            double dist = std::sqrt(std::pow(radX - wallX, 2) + std::pow(radY - wallY, 2));
+
+            // Radiation intensity falls linearly with distance
+            if (dist > 0) {
+                temp[i] = 1.0 / dist;
+                totalInverseDistance += temp[i];
+            }
+        }
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            if (temp[i] > 0) {
+                ViewFactor vf;
+                vf.sourceIdx = radIdx;
+                vf.targetIdx = initialState->boundaryCells[i];
+                vf.factor = temp[i] / totalInverseDistance;
+                initialState->viewFactors.push_back(vf);
+            }
+        }
+    }
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(initialState);
@@ -108,10 +174,13 @@ void LocalEngine::stepFoward() {
             }
         }
 
+        double previousEnergy = state.TempAvg * cells;
         Grid gridTemp(state.cells);
-        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
 
-        this->Stream(gridTemp, state.grid);
+        // Physics Steps
+        this->Radiation(state);
+        this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
+        this->Stream(gridTemp, state.grid, state.isRad, state);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
@@ -156,14 +225,18 @@ void LocalEngine::stepFoward() {
         }
         state.TempAvg = tempAvgLocal / cells;
 
+        double currentEnergy = state.TempAvg * cells;
+        double totalEnergyOutput = currentEnergy - previousEnergy;
+        // Get convection
+        double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
+        history.convectionOutput.push_back(convectionThisStep);
+
         state.current_step++;
 
-            history.time_history.push_back(state.current_step);
-          history.max_temp_history.push_back(current_max);
-          history.min_temp_history.push_back(current_min);
-          history.temperature_history.push_back(state.temperatures);
-
-
+        history.time_history.push_back(state.current_step);
+        history.max_temp_history.push_back(current_max);
+        history.min_temp_history.push_back(current_min);
+        history.temperature_history.push_back(state.temperatures);
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
@@ -282,7 +355,7 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state) {
     const int n_cells = cells;
     const int w = width;
     const int h = height;
@@ -311,6 +384,8 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
         for (int x = 0; x < w; x++) {
             int currentIndex = y * w + x;
 
+            if (isRad[currentIndex]) continue;
+
             // Streaming each direction
             // In SoA the main idea is to write
             // from the old grid current index
@@ -318,22 +393,102 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
             for (int d = 0; d < 9; ++d) {
                 int sourceX = x - cx[d];
                 int sourceY = y - cy[d];
+                int oppositeDir = inv[d];
 
                 // check if the next x and y are in bound
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < w && sourceY < h) {
                     int sourceIndex = sourceY * w + sourceX;
-                    g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
-                    f_new[d * n_cells + currentIndex] = f_old[d * n_cells + sourceIndex];
+
+                    if (isRad[sourceIndex]) {
+                        g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + sourceIndex] + 2.0 * weights[d] * state.temperatures[sourceIndex];
+                        f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + sourceIndex];
+                    }
+                    else {
+                        g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
+                        f_new[d * n_cells + currentIndex] = f_old[d * n_cells + sourceIndex];
+                    }
+
+
                 }
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
-                    int oppositeDir = inv[d];
+
                     g_new[d * n_cells + currentIndex] = g_old[oppositeDir * n_cells + currentIndex];
                     f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + currentIndex];
                 }
             }
         }
     }
+}
+
+// Main Writer: Kristian
+// Reviewer:
+// Contributers:
+void LocalEngine::Radiation(SimulationState& state) {
+    double radiationThisStep = 0.0;
+
+    int numThreads = 1;
+    #ifdef _OPENMP  
+    numThreads = omp_get_max_threads();
+    #endif
+
+    state.localFluxCache.resize(numThreads, std::vector<double>(state.cells, 0.0));
+
+    #pragma omp parallel for
+    for (int i = 0; i < state.cells; ++i) {
+        double tk = state.temperatures[i] + 273.15;
+        double tk2 = tk * tk;
+        state.t4[i] = tk2 * tk2;
+    }
+
+    #pragma omp parallel
+    {
+        int tid = 0;
+        #ifdef _OPENMP
+        tid = omp_get_thread_num();
+        #endif
+
+        std::fill(state.localFluxCache[tid].begin(), state.localFluxCache[tid].end(), 0.0);
+
+        double localRad = 0;
+
+        #pragma omp for schedule(dynamic)
+        for (int i = 0; i < state.viewFactors.size(); ++i) {
+            const auto& vf = state.viewFactors[i];
+
+            // Stefan-Boltzmann law
+            double heatFlux = lattice_stefan_boltzmann * vf.factor * (state.t4[vf.sourceIdx] - state.t4[vf.targetIdx]);
+
+            // Accounting for walls
+            double wallHeatCapacity = 50.0;
+            heatFlux = heatFlux / wallHeatCapacity;
+
+            localRad += heatFlux;
+
+            state.localFluxCache[tid][vf.targetIdx] += heatFlux;
+        }
+
+        #pragma omp atomic
+        radiationThisStep += localRad;
+    }
+
+    #pragma omp parallel for
+    for (int i = 0; i < state.boundaryCells.size(); ++i) {
+        int idx = state.boundaryCells[i];
+
+        double totalFlux = 0.0;
+        for (int t = 0; t < numThreads; ++t) {
+            totalFlux += state.localFluxCache[t][idx];
+        }
+
+        if (totalFlux != 0.0) {
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d*state.cells + idx] += weights[d] * totalFlux;
+            }
+        }
+    }
+    // Helper to tune radiation
+    history.radiationOutput.push_back(radiationThisStep);
 }
 
 // Main Writer: Cosmin
