@@ -15,11 +15,12 @@ endif()
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
 set(CMAKE_CXX_STANDARD 20)
 
-# Disable GCC's default OpenMP offloading — we use native CUDA (nvcc) for GPU.
-# Must be set on both compile and link flags; LTO invokes nvptx at link time.
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=disable")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -foffload=disable")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -foffload=disable")
+# EESSI GCC injects -fopenmp via environment which triggers nvptx offloading
+# (--enable-offload-defaulted). The CUDA branch uses nvcc, not OpenMP offloading.
+# -fno-openmp must come AFTER environment flags to override them, so use
+# add_compile_options + link_options which append to the command line.
+add_compile_options(-fno-openmp -foffload=disable)
+add_link_options(-fno-openmp -foffload=disable)
 
 # Option to build with GUI (requires OpenGL/GLFW/ImGui).
 # Set -DBUILD_GUI=OFF for headless/batch-only builds (e.g., on a cluster).
