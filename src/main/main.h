@@ -18,7 +18,7 @@ inline int defaultHeight = 250;
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 55.0;
 const double ROOM_TEMP = 20.0;
-const int radX = 40;
+const int radX = 5;
 const int radY = 0;
 
 #pragma omp declare target
@@ -35,8 +35,8 @@ const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_hei
 const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
 const double thermal_relaxation_time = 3*lattice_thermal_diffusivity+0.5;
 const double velocity_relaxation_time = 3*lattice_kinematic_viscosity+0.5;
-const double thermal_relaxation_time_minus = 0.55;//0.5 + (0.25/(thermal_relaxation_time - 0.5));
-const double velocity_relaxation_time_minus = 0.55;//0.5 + (0.25/(velocity_relaxation_time- 0.5));
+const double thermal_relaxation_time_minus = 0.6;//0.5 + (0.25/(thermal_relaxation_time - 0.5));
+const double velocity_relaxation_time_minus = 0.6;//0.5 + (0.25/(velocity_relaxation_time- 0.5));
 
 const double inv_tau_g_p = 1.0 / thermal_relaxation_time;
 const double inv_tau_g_m = 1.0 / thermal_relaxation_time_minus;
@@ -51,7 +51,7 @@ const double seconds_per_step = lattice_kinematic_viscosity*((delta_x*delta_x)/r
 const double stefan_boltzman = 5.67e-8;
 const double rho_cp_air = 1206.0; // Heat capacity of air at 20c
 const double kinematic_sigma = stefan_boltzman / rho_cp_air;
-const double radiator_emissivity = 4.0;
+const double radiator_emissivity = 0.9;
 const double lattice_stefan_boltzmann = radiator_emissivity* kinematic_sigma * (seconds_per_step / delta_x); // Lattice version of stefan-boltzmann constant
 
 // Directions

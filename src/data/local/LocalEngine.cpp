@@ -462,7 +462,17 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& 
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
 
-                    g_new[d * n_cells + currentIndex] = g_old[oppositeDir * n_cells + currentIndex];
+                    if (sourceY >= h || sourceX <= 0) {
+                        // The ceiling absorbs a small percentage of the heat and replaces it with ambient temperature
+                        const double ceiling_loss_factor = 0.1;
+
+                        g_new[d * n_cells + currentIndex] = (1.0 - ceiling_loss_factor) * g_old[oppositeDir * n_cells + currentIndex]
+                                                          + ceiling_loss_factor * weights[d] * ROOM_TEMP;
+                    }
+                    else {
+                        // Side walls and floor remain perfectly insulated
+                        g_new[d * n_cells + currentIndex] = g_old[oppositeDir * n_cells + currentIndex];
+                    }
                     f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + currentIndex];
                 }
             }
