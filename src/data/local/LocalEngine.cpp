@@ -71,7 +71,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
         }
         tempAvgLocal = tempAvgLocal + initialState->temperatures[i];
     }
-    initialState->TempAvg = tempAvgLocal;
+    initialState->TempAvg = tempAvgLocal / cells;
 
     this->history = std::make_unique<SimulationHistory>();
 
@@ -79,8 +79,8 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     this->history->max_temp_history.push_back(ROOM_TEMP);
     this->history->min_temp_history.push_back(ROOM_TEMP);
     this->history->temperature_history.push_back(initialState->temperatures);
-    history.convectionOutput.push_back(0.0);
-    history.radiationOutput.push_back(0.0);
+    this->history->convectionOutput.push_back(0.0);
+    this->history->radiationOutput.push_back(0.0);
 
     std::vector<int> surfaceR;
     for (int idx : initialState->heatSources) {
@@ -167,50 +167,33 @@ void LocalEngine::stepFoward() {
 
             return;
         }
+        double current_max = ROOM_TEMP;
+        double current_min = MAX_TEMP;
 
-        // update heatSource back it its oringinal temperature
+        // update heatSource back it its oringinal temperature and increment heat
         if (previousState.isConstantHeatSource) {
             for (int idx : previousState.heatSources) {
-                if(previousState.temperatures[idx]<MAX_TEMP){
-                    nextState.temperatures[idx] = previousState.temperatures[idx]+0.1;
+                if(previousState.temperatures[idx] < MAX_TEMP){
+                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.05; // ORIGINAL: 0.0005
+                }
+                for (int d = 0; d < 9; ++d) {
+                    nextState.grid.g[d* cells + idx] = weights[d] * nextState.temperatures[idx];
+                    nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
                 }
 
-                for (int d = 0; d < 9; ++d) {
-                    nextState.grid.g[d* cells + idx] = weights[d] * previousState.temperatures[idx];
-                    nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                if (nextState.temperatures[idx] > current_max) {
+                    current_max = nextState.temperatures[idx];
                 }
             }
         }
 
-        double previousEnergy = state.TempAvg * cells;
+        double previousEnergy = previousState.TempAvg * cells;
         Grid gridTemp(previousState.cells);
 
         // Physics Steps
-        this->Radiation(previousState);
+        this->Radiation(previousState, nextState, gridTemp);
         this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
         this->Stream(gridTemp, nextState.grid, previousState.isRad, nextState);
-
-        double current_max = ROOM_TEMP;
-        double current_min = MAX_TEMP;
-        
-        //update heatSource back it its oringinal temperature
-        //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        if (state.isConstantHeatSource) {
-            for (int idx : state.heatSources) {
-                if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
-                }
-                for (int d = 0; d < 9; ++d) {
-                    state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
-                    state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-                }
-
-                if (state.temperatures[idx] > current_max) {
-                    current_max = state.temperatures[idx];
-                }
-            }
-
-        }
 
         double tempAvgLocal = 0.0;
         #ifdef _OPENMP
@@ -222,22 +205,22 @@ void LocalEngine::stepFoward() {
             double temp = 0.0;
 
             for (int d = 0; d < 9; ++d) {
-                temp += state.grid.g[d * cells + i];
+                temp += nextState.grid.g[d * cells + i];
             }
             nextState.temperatures[i] = temp;
-            tempAvgLocal = tempAvgLocal + state.temperatures[i];
+            tempAvgLocal = tempAvgLocal + nextState.temperatures[i];
 
             // Find Max and Min for the graph
             if (nextState.temperatures[i] > current_max) current_max = nextState.temperatures[i];
             if (nextState.temperatures[i] < current_min) current_min = nextState.temperatures[i];
         }
-        state.TempAvg = tempAvgLocal / cells;
+        nextState.TempAvg = tempAvgLocal / cells;
 
-        double currentEnergy = state.TempAvg * cells;
+        double currentEnergy = nextState.TempAvg * cells;
         double totalEnergyOutput = currentEnergy - previousEnergy;
         // Get convection
-        double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
-        history.convectionOutput.push_back(convectionThisStep);
+        double convectionThisStep = totalEnergyOutput - history->radiationOutput.back();
+        history->convectionOutput.push_back(convectionThisStep);
 
         nextState.current_step = previousState.current_step + 1;
         this->history->time_history.push_back(nextState.current_step);
@@ -296,14 +279,14 @@ double LocalEngine::getTotalEnergy() const {
 // Main Writer: Cosmin
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
+void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, const Grid &gridOld){
     const int n_cells = cells;
     const int w = width;
     const int h = height;
 
 #ifdef USE_OMP_TARGET_OFFLOAD
-    double* g_old = gridOld.g.data();
-    double* f_old = gridOld.f.data();
+    const double* g_old = gridOld.g.data();
+    const double* f_old = gridOld.f.data();
     double* g_new = gridNew.g.data();
     double* f_new = gridNew.f.data();
 
@@ -312,8 +295,8 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
         map(from: g_new[:9*n_cells], f_new[:9*n_cells]) \
         firstprivate(n_cells, w, h, heat_spread, TempAvg, viscosity)
 #else
-    double* g_old = gridOld.g.data();
-    double* f_old = gridOld.f.data();
+    const double* g_old = gridOld.g.data();
+    const double* f_old = gridOld.f.data();
     double* g_new = gridNew.g.data();
     double* f_new = gridNew.f.data();
 
@@ -362,7 +345,7 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& isRad, SimulationState& state) {
     const int n_cells = cells;
     const int w = width;
     const int h = height;
@@ -431,7 +414,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad,
 // Main Writer: Kristian
 // Reviewer:
 // Contributers:
-void LocalEngine::Radiation(SimulationState& state) {
+void LocalEngine::Radiation(const SimulationState& previousState, SimulationState& nextState, Grid& targetGrid) {
     double radiationThisStep = 0.0;
 
     int numThreads = 1;
@@ -439,13 +422,14 @@ void LocalEngine::Radiation(SimulationState& state) {
     numThreads = omp_get_max_threads();
     #endif
 
-    state.localFluxCache.resize(numThreads, std::vector<double>(state.cells, 0.0));
+    nextState.localFluxCache.resize(numThreads, std::vector<double>(previousState.cells, 0.0));
+    nextState.t4.resize(previousState.cells, 0.0);
 
     #pragma omp parallel for
-    for (int i = 0; i < state.cells; ++i) {
-        double tk = state.temperatures[i] + 273.15;
+    for (int i = 0; i < previousState.cells; ++i) {
+        double tk = previousState.temperatures[i] + 273.15;
         double tk2 = tk * tk;
-        state.t4[i] = tk2 * tk2;
+        nextState.t4[i] = tk2 * tk2;
     }
 
     #pragma omp parallel
@@ -455,16 +439,16 @@ void LocalEngine::Radiation(SimulationState& state) {
         tid = omp_get_thread_num();
         #endif
 
-        std::fill(state.localFluxCache[tid].begin(), state.localFluxCache[tid].end(), 0.0);
+        std::fill(nextState.localFluxCache[tid].begin(), nextState.localFluxCache[tid].end(), 0.0);
 
         double localRad = 0;
 
         #pragma omp for schedule(dynamic)
-        for (int i = 0; i < state.viewFactors.size(); ++i) {
-            const auto& vf = state.viewFactors[i];
+        for (int i = 0; i < previousState.viewFactors.size(); ++i) {
+            const auto& vf = previousState.viewFactors[i];
 
             // Stefan-Boltzmann law
-            double heatFlux = lattice_stefan_boltzmann * vf.factor * (state.t4[vf.sourceIdx] - state.t4[vf.targetIdx]);
+            double heatFlux = lattice_stefan_boltzmann * vf.factor * (nextState.t4[vf.sourceIdx] - nextState.t4[vf.targetIdx]);
 
             // Accounting for walls
             double wallHeatCapacity = 50.0;
@@ -472,7 +456,7 @@ void LocalEngine::Radiation(SimulationState& state) {
 
             localRad += heatFlux;
 
-            state.localFluxCache[tid][vf.targetIdx] += heatFlux;
+            nextState.localFluxCache[tid][vf.targetIdx] += heatFlux;
         }
 
         #pragma omp atomic
@@ -480,22 +464,22 @@ void LocalEngine::Radiation(SimulationState& state) {
     }
 
     #pragma omp parallel for
-    for (int i = 0; i < state.boundaryCells.size(); ++i) {
-        int idx = state.boundaryCells[i];
+    for (int i = 0; i < previousState.boundaryCells.size(); ++i) {
+        int idx = previousState.boundaryCells[i];
 
         double totalFlux = 0.0;
         for (int t = 0; t < numThreads; ++t) {
-            totalFlux += state.localFluxCache[t][idx];
+            totalFlux += nextState.localFluxCache[t][idx];
         }
 
         if (totalFlux != 0.0) {
             for (int d = 0; d < 9; ++d) {
-                state.grid.g[d*state.cells + idx] += weights[d] * totalFlux;
+                targetGrid.g[d*previousState.cells + idx] += weights[d] * totalFlux;
             }
         }
     }
     // Helper to tune radiation
-    history.radiationOutput.push_back(radiationThisStep);
+    history->radiationOutput.push_back(radiationThisStep);
 }
 
 // Main Writer: Cosmin
