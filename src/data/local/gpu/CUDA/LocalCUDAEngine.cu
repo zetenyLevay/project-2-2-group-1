@@ -267,6 +267,7 @@ void LocalCUDAEngine::stepFoward() {
 
             // Auto play check
             if (this->getAutoPlayStatus()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 this->stepFoward();
             }
 
@@ -320,30 +321,32 @@ void LocalCUDAEngine::stepFoward() {
         }
 
         nextState.current_step = previousState.current_step + 1;
-        this->history->time_history.push_back(nextState.current_step);
-        this->history->max_temp_history.push_back(current_max);
-        this->history->min_temp_history.push_back(current_min);
-        this->history->temperature_history.push_back(nextState.temperatures);
+        {
+            std::unique_lock<std::shared_mutex> lock(this->historyMutex);
+            this->history->time_history.push_back(nextState.current_step);
+            this->history->max_temp_history.push_back(current_max);
+            this->history->min_temp_history.push_back(current_min);
+            this->history->temperature_history.push_back(nextState.temperatures);
+        }
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             this->stepFoward();
         }
     });
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer:
 // Contributers:
 void LocalCUDAEngine::stepBack() {
     thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
-        // Prevent going back beyond initial state
         if (previousState.current_step <= 0) return;
-    
-        // Decrement the current step
-        nextState.current_step = previousState.current_step - 1;
 
-        nextState.temperatures = history->temperature_history[nextState.current_step];
+        nextState.current_step = previousState.current_step - 1;
+        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.grid = previousState.grid;
     });
 }
 
@@ -353,11 +356,11 @@ void LocalCUDAEngine::stepBack() {
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalCUDAEngine::seekTo(int step) {
     thread->submitTask([this, step](const SimulationState& previousState, SimulationState& nextState) {
-        // Prevent going out of bounds
-        if (step < 0 || step >= history->temperature_history.size()) return;
+        if (step < 0 || step >= (int)this->history->temperature_history.size()) return;
 
         nextState.current_step = step;
-        nextState.temperatures = history->temperature_history[nextState.current_step];
+        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.grid = previousState.grid;
     });
 }
 

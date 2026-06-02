@@ -69,6 +69,7 @@ void LocalEngine::stepFoward() {
 
             // Auto play check
             if (this->getAutoPlayStatus()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 this->stepFoward();
             }
 
@@ -122,30 +123,32 @@ void LocalEngine::stepFoward() {
         }
 
         nextState.current_step = previousState.current_step + 1;
-        this->history->time_history.push_back(nextState.current_step);
-        this->history->max_temp_history.push_back(current_max);
-        this->history->min_temp_history.push_back(current_min);
-        this->history->temperature_history.push_back(nextState.temperatures);
+        {
+            std::unique_lock<std::shared_mutex> lock(this->historyMutex);
+            this->history->time_history.push_back(nextState.current_step);
+            this->history->max_temp_history.push_back(current_max);
+            this->history->min_temp_history.push_back(current_min);
+            this->history->temperature_history.push_back(nextState.temperatures);
+        }
 
         // Auto play check
         if (this->getAutoPlayStatus()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             this->stepFoward();
         }
     });
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer:
 // Contributers:
 void LocalEngine::stepBack() {
     thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
-        // Prevent going back beyond initial state
         if (previousState.current_step <= 0) return;
-    
-        // Decrement the current step
-        nextState.current_step = previousState.current_step - 1;
 
-        nextState.temperatures = history->temperature_history[nextState.current_step];
+        nextState.current_step = previousState.current_step - 1;
+        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.grid = previousState.grid;
     });
 }
 
@@ -155,11 +158,11 @@ void LocalEngine::stepBack() {
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
     thread->submitTask([this, step](const SimulationState& previousState, SimulationState& nextState) {
-        // Prevent going out of bounds
-        if (step < 0 || step >= history->temperature_history.size()) return;
+        if (step < 0 || step >= (int)this->history->temperature_history.size()) return;
 
         nextState.current_step = step;
-        nextState.temperatures = history->temperature_history[nextState.current_step];
+        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.grid = previousState.grid;
     });
 }
 
@@ -176,53 +179,49 @@ double LocalEngine::getTotalEnergy() const {
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
 // Main Writer: Cosmin
-// Reviewer: 
+// Reviewer:
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, const Grid &gridOld){
+void LocalEngine::Collision(double tauT, double TempAvg, double tauF, Grid& gridNew, const Grid &gridOld) {
+    const double inv_tauF = 1.0 / tauF;
+    const double inv_tauT = 1.0 / tauT;
+    const double inv_cs2 = 1.0 / cs2;
+    const double inv_cs4 = inv_cs2 * inv_cs2;
+    const double half_inv_tauF = 1.0 - 0.5 / tauF;
 
-    //gridNew - output grid, gridOld - input grid
-    //heat_spred - controls temperature update
-	// tempAvg - average temperature of the grid
-	// viscosity - controls the fluid movement update
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int idx = getIndex(x, y);
 
-
-    for (int y = 0; y < height; y++){
-        for(int x = 0; x < width; x++){
-            int idx= getIndex(x,y);
-
-            // Calculating density of every f inside a cell
             std::array<double, 3> result = getDensityAndVelocity(gridOld, idx);
             double density = result[0];
-            double ux = result[1]; //horizontal velocity
-            double uy = result[2]; //vertical velocity
+            double ux = result[1];
+            double uy = result[2];
+
             double temp = 0.0;
-            //calculating the temperature for every direction inside a cell
             for (int d = 0; d < 9; ++d) {
-                temp += gridOld.g[d][idx]; 
-            }
-            //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
-            //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = -lattice_buoyancy *(temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
-
-            //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
-            // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
-            //half force term of uy
-            double uyF=0.0; 
-            if(density!=0){
-                uyF=uy+  0.5 * buoyancy / density;
+                temp += gridOld.g[d][idx];
             }
 
-            // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
+            double buoyancy = -lattice_buoyancy * (temp - TempAvg);
+            double uyF = (density != 0.0) ? uy + 0.5 * buoyancy : 0.0;
+
             for (int d = 0; d < 9; ++d) {
-                double cuF = cx[d]*ux + cy[d]*uyF;
-                //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
-                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
-                //The complete Lattice Boltzmann Fluid movement formula
-                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/density_relaxation_time) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
-                //The complete Lattice boltzmann Thermal formula
-                double cuT=cx[d]*ux + cy[d]*uyF;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/thermal_relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
-                
+                double cuF = cx[d] * ux + cy[d] * uyF;
+                double cuT = cx[d] * ux + cy[d] * uyF;
+                double cuF2 = cuF * cuF;
+                double u2F = ux * ux + uyF * uyF;
+
+                double feq = weights[d] * density *
+                    (1.0 + cuF * inv_cs2 + cuF2 * 0.5 * inv_cs4 - u2F * 0.5 * inv_cs2);
+
+                double forceTerm = weights[d] * half_inv_tauF *
+                    (((cy[d] - uyF) * buoyancy) * inv_cs2 +
+                     (cuF * (cy[d] * buoyancy)) * inv_cs4);
+
+                gridNew.f[d][idx] = gridOld.f[d][idx] - inv_tauF * (gridOld.f[d][idx] - feq) + forceTerm;
+
+                double geq = weights[d] * temp * (1.0 + cuT * inv_cs2);
+                gridNew.g[d][idx] = gridOld.g[d][idx] - inv_tauT * (gridOld.g[d][idx] - geq);
             }
         }
     }

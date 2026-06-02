@@ -81,9 +81,12 @@ bool saveSimulation(const SimulationState& state, const SimulationHistory* histo
         out.write(reinterpret_cast<const char*>(history->temperature_history[i].data()), state.cells * sizeof(double));
     }
 
-    // Get most recent grid
+    // Write most recent grid (g and f)
     for (int d = 0; d < 9; ++d) {
         out.write(reinterpret_cast<const char*>(state.grid.g[d].data()), state.cells * sizeof(double));
+    }
+    for (int d = 0; d < 9; ++d) {
+        out.write(reinterpret_cast<const char*>(state.grid.f[d].data()), state.cells * sizeof(double));
     }
 
     out.close();

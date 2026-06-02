@@ -93,6 +93,7 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         const SimulationState& state = *(engine->getState());
 
+        std::shared_lock<std::shared_mutex> historyLock(engine->historyMutex);
         const SimulationHistory* history = engine->getReadOnlyHistory();
 
         ImGui_ImplOpenGL3_NewFrame();

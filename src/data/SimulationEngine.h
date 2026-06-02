@@ -11,6 +11,7 @@ class ReusableThread;
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <shared_mutex>
 
 struct SimulationState {
     int width, height, cells;
@@ -65,11 +66,13 @@ public:
 
     const SimulationHistory* getReadOnlyHistory();
 
+    mutable std::shared_mutex historyMutex;
+
     protected:
         std::unique_ptr<SimulationHistory> history;
 
     private:
-        bool autoPlay = false;    
+        bool autoPlay = false;
 };
 
 enum DataSource {
@@ -120,9 +123,12 @@ std::unique_ptr<T> loadSimulation(const std::string& filepath) {
     }
 
 
-    // Write most recent grid
+    // Read most recent grid (g and f)
     for (int d = 0; d < 9; ++d) {
         in.read(reinterpret_cast<char*>(state->grid.g[d].data()), state->cells * sizeof(double));
+    }
+    for (int d = 0; d < 9; ++d) {
+        in.read(reinterpret_cast<char*>(state->grid.f[d].data()), state->cells * sizeof(double));
     }
 
     // Go to the last frame of the sim
