@@ -30,7 +30,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->t4.resize(cells, 0.0);
     initialState->grid = initialState->cells;
     initialState->current_step = 0;
-    initialState->heat_spread = thermal_relaxation_time;
+    initialState->heat_spread = tau_g;
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
     initialState->heatSourceW = width * 0.1;
@@ -174,7 +174,7 @@ void LocalEngine::stepFoward() {
         if (previousState.isConstantHeatSource) {
             for (int idx : previousState.heatSources) {
                 if(previousState.temperatures[idx] < MAX_TEMP){
-                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.05; // ORIGINAL: 0.0005
+                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.0005; // ORIGINAL: 0.0005
                 }
                 for (int d = 0; d < 9; ++d) {
                     nextState.grid.g[d* cells + idx] = weights[d] * nextState.temperatures[idx];
@@ -332,11 +332,11 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
-                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
-                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/density_relaxation_time) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                double forceTerm=weights[d] *(1.0- 0.5/tau_f)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
+                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/tau_f) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
 
                 double cuT=cx[d]*ux + cy[d]*uy;
-                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/thermal_relaxation_time) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
+                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/tau_g) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
             }
         }
     }

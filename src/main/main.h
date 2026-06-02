@@ -10,8 +10,8 @@
 #include <cmath>
 
 // Default Width and Height
-inline int defaultWidth = 100;
-inline int defaultHeight = 100;
+inline int defaultWidth = 32;
+inline int defaultHeight = 32;
 
 // Main Writer: Zétény
 // Physics constants
@@ -33,8 +33,8 @@ const double cs2 = 1.0/3; // lattice speed of sound squared
 const double lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
 const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
 const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
-const double thermal_relaxation_time = 3*lattice_thermal_diffusivity+0.5;
-const double density_relaxation_time = 3*lattice_kinematic_viscosity+0.5;
+const double tau_g = 3*lattice_thermal_diffusivity+0.5;
+const double tau_f = 3*lattice_kinematic_viscosity+0.5;
 const double real_viscosity = 1.5e-5;// kinematic viscosity of air at 20c in real life (m2/s)
 const double delta_x = room_height/cells_height;
 const double seconds_per_step = lattice_kinematic_viscosity*((delta_x*delta_x)/real_viscosity);
