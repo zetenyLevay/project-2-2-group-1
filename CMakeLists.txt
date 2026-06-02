@@ -13,10 +13,17 @@ else()
 endif()
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
-set(CMAKE_CXX_STANDARD 20) 
+set(CMAKE_CXX_STANDARD 20)
 
-find_package(Threads REQUIRED) # For WebSocket background threading
-find_package(OpenGL REQUIRED)  # For ImGui hardware acceleration
+# Option to build with GUI (requires OpenGL/GLFW/ImGui).
+# Set -DBUILD_GUI=OFF for headless/batch-only builds (e.g., on a cluster).
+option(BUILD_GUI "Build the GUI application" ON)
+
+find_package(Threads REQUIRED)
+
+if(BUILD_GUI)
+    find_package(OpenGL REQUIRED)
+endif()
 
 include(FetchContent)
 
@@ -31,33 +38,44 @@ add_library(asio INTERFACE)
 target_include_directories(asio INTERFACE ${asio_SOURCE_DIR}/asio/include)
 target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
 
-add_subdirectory(vendor/glfw-3.4)
+if(BUILD_GUI)
+    add_subdirectory(vendor/glfw-3.4)
+endif()
 
-set(IMGUI_SOURCES
-    vendor/imgui/imgui.cpp
-    vendor/imgui/imgui_draw.cpp
-    vendor/imgui/imgui_widgets.cpp
-    vendor/imgui/imgui_tables.cpp
-    vendor/imgui/imgui_demo.cpp
-    vendor/imgui/backends/imgui_impl_glfw.cpp
-    vendor/imgui/backends/imgui_impl_opengl3.cpp
-)
+if(BUILD_GUI)
+    set(IMGUI_SOURCES
+        vendor/imgui/imgui.cpp
+        vendor/imgui/imgui_draw.cpp
+        vendor/imgui/imgui_widgets.cpp
+        vendor/imgui/imgui_tables.cpp
+        vendor/imgui/imgui_demo.cpp
+        vendor/imgui/backends/imgui_impl_glfw.cpp
+        vendor/imgui/backends/imgui_impl_opengl3.cpp
+    )
 
-set(IMPLOT_SOURCES
-    vendor/implot/implot.cpp
-    vendor/implot/implot_items.cpp
-    vendor/implot/implot_demo.cpp
-)
+    set(IMPLOT_SOURCES
+        vendor/implot/implot.cpp
+        vendor/implot/implot_items.cpp
+        vendor/implot/implot_demo.cpp
+    )
+endif()
 
 include_directories(
     src/main
-    src/ui
-    src/physics
-    vendor/imgui
-    vendor/imgui/backends
-    vendor/implot
-    vendor/pfd
+    src/data
+    src/data/cavity
+    src/thread
 )
+
+if(BUILD_GUI)
+    include_directories(
+        src/ui
+        vendor/imgui
+        vendor/imgui/backends
+        vendor/implot
+        vendor/pfd
+    )
+endif()
 
 add_library(simulation_logic
     src/data/SimulationEngine.cpp
@@ -83,26 +101,44 @@ if(CMAKE_CUDA_COMPILER)
         src/data/local/gpu/CUDA/LocalCUDAEngine.cu
         src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
     )
-    
-    set_source_files_properties(src/ui/ui.cpp PROPERTIES LANGUAGE CUDA)
 else()
     set(CUDA_SOURCES "")
 endif()
 
-add_executable(project_2_2_group_1
-    src/main/main.cpp
-    src/ui/ui.cpp
-    src/ui/ui.h
-    ${IMGUI_SOURCES}
-    ${IMPLOT_SOURCES}
-    ${CUDA_SOURCES}
-)
+# --- Main executable ---
+if(BUILD_GUI)
+    if(CMAKE_CUDA_COMPILER)
+        set_source_files_properties(src/ui/ui.cpp PROPERTIES LANGUAGE CUDA)
+    endif()
 
-# Link everything together for the main app
-target_link_libraries(project_2_2_group_1 
-    simulation_logic 
-    glfw 
-    OpenGL::GL 
-    asio
-    Threads::Threads
-)
+    add_executable(project_2_2_group_1
+        src/main/main.cpp
+        src/ui/ui.cpp
+        src/ui/ui.h
+        ${IMGUI_SOURCES}
+        ${IMPLOT_SOURCES}
+        ${CUDA_SOURCES}
+    )
+
+    target_link_libraries(project_2_2_group_1
+        simulation_logic
+        glfw
+        OpenGL::GL
+        asio
+        Threads::Threads
+    )
+
+    if(WIN32)
+        target_link_libraries(project_2_2_group_1 ws2_32 wsock32)
+    endif()
+else()
+    add_executable(project_2_2_group_1
+        src/main/main_batch.cpp
+        ${CUDA_SOURCES}
+    )
+
+    target_link_libraries(project_2_2_group_1
+        simulation_logic
+        Threads::Threads
+    )
+endif()
