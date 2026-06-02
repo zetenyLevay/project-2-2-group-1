@@ -18,7 +18,7 @@ inline int defaultHeight = 250;
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 55.0;
 const double ROOM_TEMP = 20.0;
-const int radX = 5;
+const int radX = 100;
 const int radY = 0;
 
 #pragma omp declare target
@@ -26,22 +26,22 @@ const double room_height = 2.5; // in meters
 const double cells_height = (double)defaultHeight; // cells of 1d
 const double delta_T = MAX_TEMP-ROOM_TEMP;
 const double mach_number = 0.1; // for stability
-const double rayliegh_num = 1e9;
+const double rayliegh_num = 5.5e8;
 const double prandtl_num = 0.71; // prandtl number of air
 const double cs = 1/sqrt(3); // lattice speed of sound
 const double cs2 = 1.0/3; // lattice speed of sound squared
 const double lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
 const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
 const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
-const double thermal_relaxation_time = 3*lattice_thermal_diffusivity+0.5;
-const double velocity_relaxation_time = 3*lattice_kinematic_viscosity+0.5;
-const double thermal_relaxation_time_minus = 0.6;//0.5 + (0.25/(thermal_relaxation_time - 0.5));
-const double velocity_relaxation_time_minus = 0.6;//0.5 + (0.25/(velocity_relaxation_time- 0.5));
+const double tau_g = 3*lattice_thermal_diffusivity+0.5;
+const double tau_f = 3*lattice_kinematic_viscosity+0.5;
+const double tau_g_minus = 0.6;//0.5 + (0.25/(tau_g - 0.5));
+const double tau_f_minus = 0.6;//0.5 + (0.25/(tau_f- 0.5));
 
-const double inv_tau_g_p = 1.0 / thermal_relaxation_time;
-const double inv_tau_g_m = 1.0 / thermal_relaxation_time_minus;
-const double inv_tau_f_p = 1.0 / velocity_relaxation_time;
-const double inv_tau_f_m = 1.0 / velocity_relaxation_time_minus;
+const double inv_tau_g_p = 1.0 / tau_g;
+const double inv_tau_g_m = 1.0 / tau_g_minus;
+const double inv_tau_f_p = 1.0 / tau_f;
+const double inv_tau_f_m = 1.0 / tau_f_minus;
 
 
 const double real_viscosity = 1.5e-5;// kinematic viscosity of air at 20c in real life (m2/s)

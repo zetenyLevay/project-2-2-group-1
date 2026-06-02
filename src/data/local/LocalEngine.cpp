@@ -31,7 +31,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->t4.resize(cells, 0.0);
     initialState->grid = initialState->cells;
     initialState->current_step = 0;
-    initialState->heat_spread = thermal_relaxation_time;
+    initialState->heat_spread = tau_g;
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
     initialState->heatSourceW = width * 0.1;
@@ -134,7 +134,8 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
             // Radiation intensity falls linearly with distance
             if (dist > 0) {
-                temp[i] = 1.0 / dist;
+                double effective_dist = std::max(dist, 2.0);
+                temp[i] = 1.0 / effective_dist;
                 totalInverseDistance += temp[i];
             }
         }
@@ -464,7 +465,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& 
 
                     if (sourceY >= h || sourceX <= 0) {
                         // The ceiling absorbs a small percentage of the heat and replaces it with ambient temperature
-                        const double ceiling_loss_factor = 0.1;
+                        const double ceiling_loss_factor = 0.2;
 
                         g_new[d * n_cells + currentIndex] = (1.0 - ceiling_loss_factor) * g_old[oppositeDir * n_cells + currentIndex]
                                                           + ceiling_loss_factor * weights[d] * ROOM_TEMP;
