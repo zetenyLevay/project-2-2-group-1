@@ -5,6 +5,11 @@
 #include <iostream>
 #include <filesystem>
 
+// OpenMP support
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // Initialized on main thread
 // Main Writer: Berke/Kristian 
 // Reviewer: 
@@ -17,38 +22,124 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
     auto cells = initialState->cells = width * height;
 
+    int numThreads = 1;
+    #ifdef _OPENMP
+    numThreads = omp_get_max_threads();
+    #endif
+    initialState->localFluxCache.resize(numThreads, std::vector<double>(cells, 0.0));
+    initialState->t4.resize(cells, 0.0);
     initialState->grid = initialState->cells;
-
     initialState->current_step = 0;
     initialState->heat_spread = thermal_relaxation_time;
     initialState->viscosity = lattice_kinematic_viscosity;
     initialState->TempAvg=0.0;
-    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
+    initialState->heatSourceW = width * 0.1;
+    initialState->heatSourceH = height * 0.4;
+
+    // Set heatsources
+    // (x,y) = (0,0); the radiator's position
+    for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
+        for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
+            initialState->heatSources.push_back(getIndex(x,y));
+        }
+    }
+
     //relaxation times for heat_spread and visocsity
     //we are using 3 because we divide by cs2 which is 1/3
     initialState->tauF = initialState->viscosity*3 +0.5;
     initialState->tauT = initialState->heat_spread*3  +0.5;
     initialState->TempAvg = 0.0;
-    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
     initialState->isConstantHeatSource = constantHeatSource;
-    initialState->temperatures.resize(cells, 20.0); // room temp assumption
+    initialState->temperatures.resize(cells, ROOM_TEMP);
+    initialState->isRad.resize(cells, false);
 
-    // Initialize Grid 
+    // Set heatsource for frame 0
+    for (int idx : initialState->heatSources) {
+        initialState->temperatures[idx] = ROOM_TEMP;
+        initialState->isRad[idx] = true;
+    }
+
+    // Initialize Grid
+    double tempAvgLocal = 0.0;
+    #ifdef _OPENMP
+    #pragma omp parallel for reduction(+:tempAvgLocal)
+    #endif
     for (int i = 0; i < cells; i++) {
         for (int d = 0; d < 9; ++d) {
-            initialState->grid.g[d][i] = weights[d] * initialState->temperatures[i];
-            initialState->grid.f[d][i] = weights[d] *1.0; //initializing the flow of the fluid 
+            initialState->grid.g[d * cells + i] = weights[d] * initialState->temperatures[i];
+            initialState->grid.f[d * cells + i] = weights[d] *1.0; //initializing the flow of the fluid
         }
-        initialState->TempAvg = initialState->TempAvg + initialState->temperatures[i];
+        tempAvgLocal = tempAvgLocal + initialState->temperatures[i];
     }
-    initialState->TempAvg = initialState->TempAvg/cells;
+    initialState->TempAvg = tempAvgLocal;
 
     this->history = std::make_unique<SimulationHistory>();
 
     this->history->time_history.push_back(initialState->current_step);
-    this->history->max_temp_history.push_back(MAX_TEMP);
+    this->history->max_temp_history.push_back(ROOM_TEMP);
     this->history->min_temp_history.push_back(ROOM_TEMP);
     this->history->temperature_history.push_back(initialState->temperatures);
+    history.convectionOutput.push_back(0.0);
+    history.radiationOutput.push_back(0.0);
+
+    std::vector<int> surfaceR;
+    for (int idx : initialState->heatSources) {
+        int rX = idx % width;
+        int rY = idx / width;
+
+        bool isSurface = ((rX == radX) || (rX == radX + initialState->heatSourceW -1) || (rY == radY) || (rY == radY + initialState->heatSourceH -1));
+
+        if (isSurface) {
+            surfaceR.push_back(idx);
+        }
+    }
+
+    // Radiation Setup
+    // Get boundary Cells
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
+                // Ignore radiator cells
+                if (!initialState->isRad[getIndex(x,y)]) {
+                    initialState->boundaryCells.push_back(getIndex(x,y));
+                }
+            }
+        }
+    }
+
+    // Calculate View Factors (For each radiator cell, the distance from it to the wall)
+    for (int radIdx : surfaceR) {
+        int radX = radIdx % width;
+        int radY = radIdx / width;
+
+        double totalInverseDistance = 0.0;
+        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            int wallIdx = initialState->boundaryCells[i];
+            int wallX = wallIdx % width;
+            int wallY = wallIdx / width;
+
+            // Distance
+            double dist = std::sqrt(((radX - wallX) * (radX - wallX)) + ((radY - wallY) * (radY - wallY)));
+
+            // Radiation intensity falls linearly with distance
+            if (dist > 0) {
+                temp[i] = 1.0 / dist;
+                totalInverseDistance += temp[i];
+            }
+        }
+
+        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+            if (temp[i] > 0) {
+                ViewFactor vf;
+                vf.sourceIdx = radIdx;
+                vf.targetIdx = initialState->boundaryCells[i];
+                vf.factor = temp[i] / totalInverseDistance;
+                initialState->viewFactors.push_back(vf);
+            }
+        }
+    }
 
     // Launch the compute thread.
     this->thread = std::make_unique<ReusableThread>(std::move(initialState));
@@ -79,49 +170,74 @@ void LocalEngine::stepFoward() {
 
         // update heatSource back it its oringinal temperature
         if (previousState.isConstantHeatSource) {
-            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
-                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+            for (int idx : previousState.heatSources) {
+                if(previousState.temperatures[idx]<MAX_TEMP){
+                    nextState.temperatures[idx] = previousState.temperatures[idx]+0.1;
+                }
+
+                for (int d = 0; d < 9; ++d) {
+                    nextState.grid.g[d* cells + idx] = weights[d] * previousState.temperatures[idx];
+                    nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                }
             }
         }
 
+        double previousEnergy = state.TempAvg * cells;
         Grid gridTemp(previousState.cells);
-        this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
 
-        this->Stream(gridTemp, nextState.grid);
+        // Physics Steps
+        this->Radiation(previousState);
+        this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
+        this->Stream(gridTemp, nextState.grid, previousState.isRad, nextState);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
-        nextState.TempAvg=0.0;
+        
+        //update heatSource back it its oringinal temperature
+        //doing it twice to ensure that the temperature reamins consitent and there is no flow
+        if (state.isConstantHeatSource) {
+            for (int idx : state.heatSources) {
+                if(state.temperatures[idx]<MAX_TEMP){
+                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
+                }
+                for (int d = 0; d < 9; ++d) {
+                    state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
+                    state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                }
+
+                if (state.temperatures[idx] > current_max) {
+                    current_max = state.temperatures[idx];
+                }
+            }
+
+        }
+
+        double tempAvgLocal = 0.0;
+        #ifdef _OPENMP
+        #pragma omp parallel for reduction(+:tempAvgLocal) \
+            reduction(max:current_max) \
+            reduction(min:current_min)
+        #endif
         for (int i = 0; i < cells; i++) {
             double temp = 0.0;
 
             for (int d = 0; d < 9; ++d) {
-                temp += nextState.grid.g[d][i];
+                temp += state.grid.g[d * cells + i];
             }
             nextState.temperatures[i] = temp;
-            nextState.TempAvg += nextState.temperatures[i];
+            tempAvgLocal = tempAvgLocal + state.temperatures[i];
 
             // Find Max and Min for the graph
             if (nextState.temperatures[i] > current_max) current_max = nextState.temperatures[i];
             if (nextState.temperatures[i] < current_min) current_min = nextState.temperatures[i];
         }
-        nextState.TempAvg= nextState.TempAvg / cells;
+        state.TempAvg = tempAvgLocal / cells;
 
-        //update heatSource back it its oringinal temperature
-        //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        if (previousState.isConstantHeatSource) {
-            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
-                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-            }
-
-            if (nextState.temperatures[nextState.heatSource] > current_max) {
-                current_max = nextState.temperatures[nextState.heatSource];
-            }
-        }
+        double currentEnergy = state.TempAvg * cells;
+        double totalEnergyOutput = currentEnergy - previousEnergy;
+        // Get convection
+        double convectionThisStep = totalEnergyOutput - history.radiationOutput.back();
+        history.convectionOutput.push_back(convectionThisStep);
 
         nextState.current_step = previousState.current_step + 1;
         this->history->time_history.push_back(nextState.current_step);
@@ -180,36 +296,52 @@ double LocalEngine::getTotalEnergy() const {
 // Main Writer: Cosmin
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, const Grid &gridOld){
+void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, Grid &gridOld){
+    const int n_cells = cells;
+    const int w = width;
+    const int h = height;
 
-    //gridNew - output grid, gridOld - input grid
-    //heat_spred - controls temperature update
-	// tempAvg - average temperature of the grid
-	// viscosity - controls the fluid movement update
+#ifdef USE_OMP_TARGET_OFFLOAD
+    double* g_old = gridOld.g.data();
+    double* f_old = gridOld.f.data();
+    double* g_new = gridNew.g.data();
+    double* f_new = gridNew.f.data();
 
+    #pragma omp target teams distribute parallel for collapse(2) \
+        map(to: g_old[:9*n_cells], f_old[:9*n_cells]) \
+        map(from: g_new[:9*n_cells], f_new[:9*n_cells]) \
+        firstprivate(n_cells, w, h, heat_spread, TempAvg, viscosity)
+#else
+    double* g_old = gridOld.g.data();
+    double* f_old = gridOld.f.data();
+    double* g_new = gridNew.g.data();
+    double* f_new = gridNew.f.data();
 
-    for (int y = 0; y < height; y++){
-        for(int x = 0; x < width; x++){
-            int idx= getIndex(x,y);
+    #ifdef _OPENMP
+    #pragma omp parallel for collapse(2) schedule(dynamic)
+    #endif
+#endif
+    for (int y = 0; y < h; y++){
+        for(int x = 0; x < w; x++){
+            int idx = y * w + x;
 
-            // Calculating density of every f inside a cell
-            std::array<double, 3> result = getDensityAndVelocity(gridOld, idx);
+            std::array<double, 3> result = computeDensityAndVelocity(f_old, n_cells, idx);
             double density = result[0];
             double ux = result[1]; //horizontal velocity
             double uy = result[2]; //vertical velocity
             double temp = 0.0;
-            //calculating the temperature for every direction inside a cell
             for (int d = 0; d < 9; ++d) {
-                temp += gridOld.g[d][idx]; 
+                temp += g_old[d * n_cells + idx];
             }
+
             //buoyancy is calculated using a simplied version of the Boussinesq approximation: beta * (T-Tavg)
             //buoyancy represents how much the hot fluid wants to rise up
-            double buoyancy = -lattice_buoyancy *(temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
+            double buoyancy = lattice_buoyancy * (temp-ROOM_TEMP);  //4*1e-5 represents the thermal expansion strenght
 
             //we use half force to better represent how and when the force is applied, the second half will be added from the forceTerm
             // because the buoyancy value of ux is 0 we do not need to calculate the half force term of ux, we can just use ux
             //half force term of uy
-            double uyF=0.0; 
+            double uyF=0.0;
             if(density!=0){
                 uyF=uy+  0.5 * buoyancy / density;
             }
@@ -217,14 +349,11 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
-                //Guo Forcing term. Used to correctly add force(adding movement due to the heat) to the collision step of the Lattice Boltzmann method
                 double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
-                //The complete Lattice Boltzmann Fluid movement formula
-                gridNew.f[d][idx] = gridOld.f[d][idx] - (1.0/density_relaxation_time) * (gridOld.f[d][idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
-                //The complete Lattice boltzmann Thermal formula
-                double cuT=cx[d]*ux + cy[d]*uyF;
-                gridNew.g[d][idx] = gridOld.g[d][idx] - (1.0/thermal_relaxation_time) * (gridOld.g[d][idx] - weights[d] * temp * (1+ cuT/cs2));
-                
+                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/density_relaxation_time) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+
+                double cuT=cx[d]*ux + cy[d]*uy;
+                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/thermal_relaxation_time) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
             }
         }
     }
@@ -233,11 +362,36 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, Grid& gridNe
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
-    for(int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            // Current cell 1D index
-            int currentIndex = getIndex(x, y);
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state) {
+    const int n_cells = cells;
+    const int w = width;
+    const int h = height;
+
+#ifdef USE_OMP_TARGET_OFFLOAD
+    double* g_old = gridOld.g.data();
+    double* f_old = gridOld.f.data();
+    double* g_new = gridNew.g.data();
+    double* f_new = gridNew.f.data();
+
+    #pragma omp target teams distribute parallel for collapse(2) \
+        map(to: g_old[:9*n_cells], f_old[:9*n_cells]) \
+        map(from: g_new[:9*n_cells], f_new[:9*n_cells]) \
+        firstprivate(n_cells, w, h)
+#else
+    double* g_old = gridOld.g.data();
+    double* f_old = gridOld.f.data();
+    double* g_new = gridNew.g.data();
+    double* f_new = gridNew.f.data();
+
+    #ifdef _OPENMP
+    #pragma omp parallel for collapse(2) schedule(static)
+    #endif
+#endif
+    for(int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            int currentIndex = y * w + x;
+
+            if (isRad[currentIndex]) continue;
 
             // Streaming each direction
             // In SoA the main idea is to write
@@ -246,22 +400,102 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew) {
             for (int d = 0; d < 9; ++d) {
                 int sourceX = x - cx[d];
                 int sourceY = y - cy[d];
+                int oppositeDir = inv[d];
 
                 // check if the next x and y are in bound
-                if (sourceX >= 0 && sourceY >= 0 && sourceX < width && sourceY < height) {
-                    int sourceIndex = getIndex(sourceX, sourceY);
-                    gridNew.g[d][currentIndex] = gridOld.g[d][sourceIndex];
-                    gridNew.f[d][currentIndex] = gridOld.f[d][sourceIndex];
+                if (sourceX >= 0 && sourceY >= 0 && sourceX < w && sourceY < h) {
+                    int sourceIndex = sourceY * w + sourceX;
+
+                    if (isRad[sourceIndex]) {
+                        g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + sourceIndex] + 2.0 * weights[d] * state.temperatures[sourceIndex];
+                        f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + sourceIndex];
+                    }
+                    else {
+                        g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
+                        f_new[d * n_cells + currentIndex] = f_old[d * n_cells + sourceIndex];
+                    }
+
+
                 }
                 // if not in bound take the opposite direction (hits wall on the west, goes east instead)
                 else {
-                    int oppositeDir = inv[d];
-                    gridNew.g[d][currentIndex] = gridOld.g[oppositeDir][currentIndex];
-                    gridNew.f[d][currentIndex] = gridOld.f[oppositeDir][currentIndex];
+
+                    g_new[d * n_cells + currentIndex] = g_old[oppositeDir * n_cells + currentIndex];
+                    f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + currentIndex];
                 }
             }
         }
     }
+}
+
+// Main Writer: Kristian
+// Reviewer:
+// Contributers:
+void LocalEngine::Radiation(SimulationState& state) {
+    double radiationThisStep = 0.0;
+
+    int numThreads = 1;
+    #ifdef _OPENMP  
+    numThreads = omp_get_max_threads();
+    #endif
+
+    state.localFluxCache.resize(numThreads, std::vector<double>(state.cells, 0.0));
+
+    #pragma omp parallel for
+    for (int i = 0; i < state.cells; ++i) {
+        double tk = state.temperatures[i] + 273.15;
+        double tk2 = tk * tk;
+        state.t4[i] = tk2 * tk2;
+    }
+
+    #pragma omp parallel
+    {
+        int tid = 0;
+        #ifdef _OPENMP
+        tid = omp_get_thread_num();
+        #endif
+
+        std::fill(state.localFluxCache[tid].begin(), state.localFluxCache[tid].end(), 0.0);
+
+        double localRad = 0;
+
+        #pragma omp for schedule(dynamic)
+        for (int i = 0; i < state.viewFactors.size(); ++i) {
+            const auto& vf = state.viewFactors[i];
+
+            // Stefan-Boltzmann law
+            double heatFlux = lattice_stefan_boltzmann * vf.factor * (state.t4[vf.sourceIdx] - state.t4[vf.targetIdx]);
+
+            // Accounting for walls
+            double wallHeatCapacity = 50.0;
+            heatFlux = heatFlux / wallHeatCapacity;
+
+            localRad += heatFlux;
+
+            state.localFluxCache[tid][vf.targetIdx] += heatFlux;
+        }
+
+        #pragma omp atomic
+        radiationThisStep += localRad;
+    }
+
+    #pragma omp parallel for
+    for (int i = 0; i < state.boundaryCells.size(); ++i) {
+        int idx = state.boundaryCells[i];
+
+        double totalFlux = 0.0;
+        for (int t = 0; t < numThreads; ++t) {
+            totalFlux += state.localFluxCache[t][idx];
+        }
+
+        if (totalFlux != 0.0) {
+            for (int d = 0; d < 9; ++d) {
+                state.grid.g[d*state.cells + idx] += weights[d] * totalFlux;
+            }
+        }
+    }
+    // Helper to tune radiation
+    history.radiationOutput.push_back(radiationThisStep);
 }
 
 // Main Writer: Cosmin
@@ -274,9 +508,9 @@ std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int
         //we get density by adding all of the moving particles
         //the ux and uy represent the collection of the right moving particles and the left moving particles
         for (int d = 0; d < 9; ++d) {
-            density +=gridOld.f[d][idx];
-            ux=ux + (gridOld.f[d][idx]*cx[d]);
-            uy=uy + (gridOld.f[d][idx]*cy[d]);
+            density +=gridOld.f[d * gridOld.cells + idx];
+            ux=ux + (gridOld.f[d * gridOld.cells + idx]*cx[d]);
+            uy=uy + (gridOld.f[d * gridOld.cells + idx]*cy[d]);
         }
         if (density!=0){
             ux/=density;
@@ -328,7 +562,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
 
     // Write most recent grid
     for (int d = 0; d < 9; ++d) {
-        in.read(reinterpret_cast<char*>(state->grid.g[d].data()), state->cells * sizeof(double));
+        in.read(reinterpret_cast<char*>(state->grid.g.data() + d * state->cells), state->cells * sizeof(double));
     }
 
     // Go to the last frame of the sim
@@ -379,7 +613,7 @@ bool saveSimulation(const SimulationState& state, const SimulationHistory* histo
 
     // Get most recent grid
     for (int d = 0; d < 9; ++d) {
-        out.write(reinterpret_cast<const char*>(state.grid.g[d].data()), state.cells * sizeof(double));
+        out.write(reinterpret_cast<const char*>(state.grid.g.data()+ d * state.cells), state.cells * sizeof(double));
     }
 
     out.close();
