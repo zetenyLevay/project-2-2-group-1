@@ -21,9 +21,14 @@ struct SimulationState {
     std::vector<double> temperatures;
     int heatSourceW;
     int heatSourceH;
+    int windowW;
+    int windowH;
     std::vector<bool> isRad;
+    std::vector<bool> isWindow;
     std::vector<int> heatSources;
+    std::vector<int> windowSources;
     bool isConstantHeatSource;
+    bool isConstantWindow;
 
     std::vector<int> boundaryCells;
     std::vector<ViewFactor> viewFactors;

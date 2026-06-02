@@ -187,7 +187,7 @@ void launchGui() {
             ImPlot::PlotHeatmap("##HeatData", 
                                 state.temperatures.data(), 
                                 state.height, state.width,
-                                ROOM_TEMP, MAX_TEMP,
+                                WINDOW_TEMP, MAX_TEMP,
                                 nullptr,       // Custom label format (nullptr hides it)
                                 ImPlotPoint(0, state.height), ImPlotPoint(state.width, 0));
 
@@ -212,8 +212,6 @@ void launchGui() {
             // Window   
             double winWidth = state.width * 0.3;
             double winHeight = state.height * 0.3;
-            double winX = state.width * 0.55;
-            double winY = state.width * 0.5;
             double grill1X = winX + (winWidth / 2);
             ImVec2 winTopLeft = ImPlot::PlotToPixels(winX, winY + winHeight);
             ImVec2 winBottomRight = ImPlot::PlotToPixels(winX + winWidth, winY);
@@ -250,7 +248,7 @@ void launchGui() {
 
         // Create the legend
         ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
-        ImPlot::ColormapScale("°C", ROOM_TEMP, MAX_TEMP, ImVec2(legendW, plotHeight * 0.3f));
+        ImPlot::ColormapScale("°C", WINDOW_TEMP, MAX_TEMP, ImVec2(legendW, plotHeight * 0.3f));
 
         ImGui::PopStyleColor();
         ImPlot::PopStyleColor();
@@ -583,7 +581,7 @@ void launchGui() {
         // Sums up every temperature in the grid to prove no heat is lost
         double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
         ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
-        ImGui::Text("One time step real world equivalent: %.2f ms ", seconds_per_step*100);
+        ImGui::Text("One time step real world equivalent: %.2f ms ", seconds_per_step*1000);
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
         ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);

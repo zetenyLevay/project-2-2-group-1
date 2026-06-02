@@ -18,8 +18,11 @@ inline int defaultHeight = 100;
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 100.0;
 const double ROOM_TEMP = 20.0;
+const double WINDOW_TEMP = 10.0;
 const int radX = 0;
 const int radY = 0;
+const int winX = 40;
+const int winY = 40;
 
 #pragma omp declare target
 const double room_height = 2.5; // in meters

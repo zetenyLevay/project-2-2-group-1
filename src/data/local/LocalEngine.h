@@ -39,7 +39,7 @@ public:
     // Physics functions
     void Radiation(SimulationState& state);
     void Collision(double tauT,double TempAvg,double tauF, Grid& gridNew, Grid &gridOld);
-    void Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state);
+    void Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, std::vector<bool>& isWindow, SimulationState& state);
 
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
 };

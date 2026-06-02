@@ -34,12 +34,21 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->TempAvg=0.0;
     initialState->heatSourceW = width * 0.1;
     initialState->heatSourceH = height * 0.4;
+    initialState->windowW = width*0.3;
+    initialState->windowH = height * 0.3;
 
     // Set heatsources
     // (x,y) = (0,0); the radiator's position
     for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
             initialState->heatSources.push_back(getIndex(x,y));
+        }
+    }
+    //set window
+    //(x,y) = (100, 300)
+    for (int y = winY; y < winY + initialState->windowH && y < height; ++y) {
+        for (int x = winX; x < winX + initialState->windowW && x < width; ++x) {
+            initialState->windowSources.push_back(getIndex(x,y));
         }
     }
 
@@ -51,11 +60,18 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->isConstantHeatSource = constantHeatSource;
     initialState->temperatures.resize(cells, ROOM_TEMP);
     initialState->isRad.resize(cells, false);
+    initialState->isWindow.resize(cells, false);
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
         initialState->temperatures[idx] = ROOM_TEMP;
         initialState->isRad[idx] = true;
+    }
+
+    initialState->isConstantWindow = true;
+    for (int idx: initialState->windowSources) {
+        initialState->temperatures[idx] = WINDOW_TEMP;
+        initialState->isWindow[idx] = true;
     }
 
     // Initialize Grid
@@ -161,18 +177,33 @@ void LocalEngine::stepFoward() {
         }
 
         // update heatSource back it its oringinal temperature
-        if (state.isConstantHeatSource) {
-            for (int idx : state.heatSources) {
-                if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.1;
-                }
+        // if (state.isConstantHeatSource) {
+        //     for (int idx : state.heatSources) {
+        //         if(state.temperatures[idx]<MAX_TEMP){
+        //             state.temperatures[idx] = state.temperatures[idx]+0.1;
+        //         }
+        //
+        //         // for (int d = 0; d < 9; ++d) {
+        //         //     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
+        //         //     //state.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
+        //         // }
+        //     }
+        // }
 
-                for (int d = 0; d < 9; ++d) {
-                    state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
-                    state.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
-                }
-            }
-        }
+        //         if (state.isConstantHeatSource) {
+        //     for (int idx : state.heatSources) {
+        //         if(state.temperatures[idx]<MAX_TEMP){
+        //             state.temperatures[idx] = state.temperatures[idx]+0.1;
+        //         }
+        //         for (int d = 0; d < 9; ++d) {
+        //            // state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
+        //             //state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+        //         }
+        //
+        //
+        //     }
+        //
+        // }
 
         double previousEnergy = state.TempAvg * cells;
         Grid gridTemp(state.cells);
@@ -180,7 +211,7 @@ void LocalEngine::stepFoward() {
         // Physics Steps
         this->Radiation(state);
         this->Collision(state.tauT,state.TempAvg,state.tauF, gridTemp, state.grid);
-        this->Stream(gridTemp, state.grid, state.isRad, state);
+        this->Stream(gridTemp, state.grid, state.isRad,state.isWindow, state);
 
         double current_max = ROOM_TEMP;
         double current_min = MAX_TEMP;
@@ -190,11 +221,11 @@ void LocalEngine::stepFoward() {
         if (state.isConstantHeatSource) {
             for (int idx : state.heatSources) {
                 if(state.temperatures[idx]<MAX_TEMP){
-                    state.temperatures[idx] = state.temperatures[idx]+0.0005;
+                    state.temperatures[idx] = state.temperatures[idx]+0.5;
                 }
                 for (int d = 0; d < 9; ++d) {
                     state.grid.g[d* cells + idx] = weights[d] * state.temperatures[idx];
-                    state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                    //state.grid.f[d* cells + idx] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
                 }
 
                 if (state.temperatures[idx] > current_max) {
@@ -204,6 +235,28 @@ void LocalEngine::stepFoward() {
 
         }
 
+        if (state.isConstantWindow) {
+            for (int idx : state.windowSources) {
+                //was ai idea idk
+                double excessHeat = state.temperatures[idx] - WINDOW_TEMP;
+
+                if (excessHeat > 0) {
+                    // The closer it gets to WINDOW_TEMP, the smaller coolingAmount becomes.
+                    // 0.05 acts as your window's thermal conductivity (removes 5% of the difference per frame).
+                    // You can tune this 0.05 multiplier to make the window a stronger or weaker sink.
+                    double coolingAmount = excessHeat * 0.0005;
+
+                    for (int d = 0; d < 9; ++d) {
+                        state.grid.g[d * cells + idx] -= weights[d] * coolingAmount;
+                    }
+                }
+
+                if (state.temperatures[idx] < current_min) {
+                  current_min = state.temperatures[idx];
+              }
+            }
+        }
+
         double tempAvgLocal = 0.0;
         #ifdef _OPENMP
         #pragma omp parallel for reduction(+:tempAvgLocal) \
@@ -211,6 +264,14 @@ void LocalEngine::stepFoward() {
             reduction(min:current_min)
         #endif
         for (int i = 0; i < cells; i++) {
+
+            if (state.isRad[i] ) {
+
+                tempAvgLocal = tempAvgLocal + state.temperatures[i];
+                if (state.temperatures[i] > current_max) current_max = state.temperatures[i];
+
+                continue;
+            }
             double temp = 0.0;
 
             for (int d = 0; d < 9; ++d) {
@@ -355,7 +416,7 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, SimulationState& state) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad, std::vector<bool>& isWindow,SimulationState& state) {
     const int n_cells = cells;
     const int w = width;
     const int h = height;
@@ -384,7 +445,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad,
         for (int x = 0; x < w; x++) {
             int currentIndex = y * w + x;
 
-            if (isRad[currentIndex]) continue;
+            if (isRad[currentIndex] ) continue;
 
             // Streaming each direction
             // In SoA the main idea is to write
@@ -399,7 +460,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, std::vector<bool>& isRad,
                 if (sourceX >= 0 && sourceY >= 0 && sourceX < w && sourceY < h) {
                     int sourceIndex = sourceY * w + sourceX;
 
-                    if (isRad[sourceIndex]) {
+                    if (isRad[sourceIndex] ) {
                         g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + sourceIndex] + 2.0 * weights[d] * state.temperatures[sourceIndex];
                         f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + sourceIndex];
                     }
