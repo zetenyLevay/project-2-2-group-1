@@ -38,7 +38,7 @@ double measure_simulation(int width, int height, int steps, int thread_count) {
     set_omp_threads(thread_count);
 
     // Create engine
-    LocalEngine engine(width, height);
+    LocalEngine engine(width, height, true);
 
     // Warmup
     for (int i = 0; i < 3; ++i) {
