@@ -582,7 +582,7 @@ void launchGui() {
         ImGui::Text("One time step real world equivalent: %.2f ms ", seconds_per_step*1000);
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
         ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
-        ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
+        ImGui::Text("Density Relaxation Time: %.4f", velocity_relaxation_time);
         double convection = history->convectionOutput[state.current_step];
         double radiation = history->radiationOutput[state.current_step];
         double ratioR = (radiation / (radiation + convection)) * 100;

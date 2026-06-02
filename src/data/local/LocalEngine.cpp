@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <random>
 
 // OpenMP support
 #ifdef _OPENMP
@@ -50,8 +51,16 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->tauT = initialState->heat_spread*3  +0.5;
     initialState->TempAvg = 0.0;
     initialState->isConstantHeatSource = constantHeatSource;
-    initialState->temperatures.resize(cells, ROOM_TEMP);
+    initialState->temperatures.resize(cells);
     initialState->isRad.resize(cells, false);
+
+    std::random_device rd;
+    std::mt19937 gen(rd()); // Or use a fixed seed like gen(42) for deterministic debugging
+    std::uniform_real_distribution<double> dis(19.00, 21.00);
+
+    for (int i = 0; i < cells; ++i) {
+        initialState->temperatures[i] = dis(gen);
+    }
 
     // Set heatsource for frame 0
     for (int idx : initialState->heatSources) {
@@ -174,11 +183,11 @@ void LocalEngine::stepFoward() {
         if (previousState.isConstantHeatSource) {
             for (int idx : previousState.heatSources) {
                 if(previousState.temperatures[idx] < MAX_TEMP){
-                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.05; // ORIGINAL: 0.0005
+                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.01; // ORIGINAL: 0.0005
                 }
                 for (int d = 0; d < 9; ++d) {
                     nextState.grid.g[d* cells + idx] = weights[d] * nextState.temperatures[idx];
-                    nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
+                    //nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
                 }
 
                 if (nextState.temperatures[idx] > current_max) {
@@ -191,8 +200,9 @@ void LocalEngine::stepFoward() {
         Grid gridTemp(previousState.cells);
 
         // Physics Steps
-        this->Radiation(previousState, nextState, gridTemp);
+
         this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
+        this->Radiation(previousState, nextState, gridTemp);
         this->Stream(gridTemp, nextState.grid, previousState.isRad, nextState);
 
         double tempAvgLocal = 0.0;
@@ -329,14 +339,63 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
                 uyF=uy+  0.5 * buoyancy / density;
             }
 
+            // Kinetic energy term doesnt have to be calculated every direction
+            const double u2_F = (ux * ux + uyF * uyF) / (2.0 * cs2);
+            const double u2_T = (ux * ux + uy * uy) / (2.0 * cs2);
+
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
-                double cuF = cx[d]*ux + cy[d]*uyF;
-                double forceTerm=weights[d] *(1.0- 0.5/density_relaxation_time)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
-                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/density_relaxation_time) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                int opp = inv[d];
+                double w_d = weights[d];
 
-                double cuT=cx[d]*ux + cy[d]*uy;
-                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/thermal_relaxation_time) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
+                double cuF = cx[d]*ux + cy[d]*uyF;
+
+
+// Extract the symmetric (even) part of the current distribution: average of direction 'd' and its opposite
+                double f_plus = 0.5 * (f_old[d * n_cells + idx] + f_old[opp * n_cells + idx]);
+                // Extract the anti-symmetric (odd) part of the current distribution: difference between 'd' and its opposite
+                double f_minus = 0.5 * (f_old[d * n_cells + idx] - f_old[opp * n_cells + idx]);
+
+                // Calculate the symmetric part of the Maxwell-Boltzmann equilibrium (contains constant and squared velocity terms)
+                double feq_p = w_d * density * (1.0 + (cuF * cuF) / (2.0 * cs2 * cs2) - u2_F);
+                // Calculate the anti-symmetric part of the equilibrium (contains only the linear velocity term)
+                double feq_m = w_d * density * (cuF / cs2);
+
+                // Calculate the specific directional force term to inject the buoyancy physics into this exact direction
+                double force = w_d * (1.0 - 0.5 * inv_tau_f_p) * (((cy[d] - uyF) * buoyancy) / cs2 + ((cx[d] * ux + cy[d] * uyF) * (cy[d] * buoyancy)) / (cs2 * cs2));
+
+                // Perform the TRT collision for momentum:
+                // 1. Take the old distribution
+                // 2. Relax the symmetric part toward the symmetric equilibrium using the physical inverse viscosity (inv_tau_f_p)
+                // 3. Relax the anti-symmetric part toward the anti-symmetric equilibrium using the stability "magic" parameter (inv_tau_f_m)
+                // 4. Add the buoyant force
+                f_new[d * n_cells + idx] = f_old[d * n_cells + idx]
+                                         - inv_tau_f_p * (f_plus - feq_p)
+                                         - inv_tau_f_m * (f_minus - feq_m)
+                                         + force;
+
+                // ==========================================
+                // 2. THERMAL FIELD (g) TRT COLLISION
+                // ==========================================
+                // Calculate the dot product of the lattice vector and the standard, unforced velocity
+                double cuT = cx[d] * ux + cy[d] * uy;
+
+                // Extract the symmetric (even) scalar part of the thermal distribution
+                double g_plus = 0.5 * (g_old[d * n_cells + idx] + g_old[opp * n_cells + idx]);
+                // Extract the anti-symmetric (odd) vector heat-flux part of the thermal distribution
+                double g_minus = 0.5 * (g_old[d * n_cells + idx] - g_old[opp * n_cells + idx]);
+
+                // Calculate the symmetric part of the thermal equilibrium (includes full quadratic terms to support high-velocity advection)
+                double geq_p = w_d * temp * (1.0 + (cuT * cuT) / (2.0 * cs2 * cs2) - u2_T);
+                // Calculate the anti-symmetric part of the thermal equilibrium
+                double geq_m = w_d * temp * (cuT / cs2);
+
+                // Perform the TRT collision for heat:
+                // Relax symmetric part using physical thermal diffusivity (inv_tau_g_p)
+                // Relax anti-symmetric part using the stability parameter (inv_tau_g_m)
+                g_new[d * n_cells + idx] = g_old[d * n_cells + idx]
+                                         - inv_tau_g_p * (g_plus - geq_p)
+                                         - inv_tau_g_m * (g_minus - geq_m);
             }
         }
     }
@@ -390,8 +449,8 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& 
                     int sourceIndex = sourceY * w + sourceX;
 
                     if (isRad[sourceIndex]) {
-                        g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + sourceIndex] + 2.0 * weights[d] * state.temperatures[sourceIndex];
-                        f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + sourceIndex];
+                        g_new[d * n_cells + currentIndex] = -g_old[oppositeDir * n_cells + currentIndex] + 2.0 * weights[d] * state.temperatures[sourceIndex];
+                        f_new[d * n_cells + currentIndex] = f_old[oppositeDir * n_cells + currentIndex];
                     }
                     else {
                         g_new[d * n_cells + currentIndex] = g_old[d * n_cells + sourceIndex];
