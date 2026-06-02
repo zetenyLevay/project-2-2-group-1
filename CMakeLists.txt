@@ -178,8 +178,8 @@ if(BUILD_GUI)
         glfw
         OpenGL::GL
         asio
-        websocketpp
         Threads::Threads
+        OpenMP::OpenMP_CXX
     )
 
     # Windows-specific networking libraries
