@@ -15,6 +15,9 @@ endif()
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
 set(CMAKE_CXX_STANDARD 20)
 
+# Disable GCC's default OpenMP offloading — we use native CUDA (nvcc) for GPU
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=disable")
+
 # Option to build with GUI (requires OpenGL/GLFW/ImGui).
 # Set -DBUILD_GUI=OFF for headless/batch-only builds (e.g., on a cluster).
 option(BUILD_GUI "Build the GUI application" ON)
