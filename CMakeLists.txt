@@ -30,6 +30,7 @@ if(OpenMP_CXX_FOUND)
 
     if(ENABLE_OMP_OFFLOAD)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload-options=${OMP_OFFLOAD_TARGET}=-fcf-protection=none")
         add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
         message(STATUS "OpenMP target offloading FORCE-ENABLED: ${OMP_OFFLOAD_TARGET}")
     else()
@@ -45,9 +46,11 @@ if(OpenMP_CXX_FOUND)
         " HAS_OMP_OFFLOAD)
         if(HAS_OMP_OFFLOAD)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=${OMP_OFFLOAD_TARGET}")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload-options=${OMP_OFFLOAD_TARGET}=-fcf-protection=none")
             add_compile_definitions(USE_OMP_TARGET_OFFLOAD)
             message(STATUS "OpenMP target offloading enabled: ${OMP_OFFLOAD_TARGET}")
         else()
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -foffload=disable")
             message(STATUS "OpenMP target offloading not available — using CPU-only OpenMP")
         endif()
         unset(CMAKE_REQUIRED_FLAGS)
@@ -226,17 +229,17 @@ endif()
 
 
 
-if(CMAKE_CUDA_COMPILER)
-    add_executable(CollisionTest
-        src/CUDA/CollisionTest.cpp
-        src/CUDA/CollisionCUDA.cu
-        src/data/local/LocalEngine.cpp
-        src/data/SimulationEngine.cpp
-        src/thread/ReusableThread.cpp
-
-    )
-
-    set_target_properties(CollisionTest PROPERTIES
-        CUDA_STANDARD 17
-    )
-endif()
+# CollisionTest disabled on main — requires CUDA branch Grid layout (array-of-vectors)
+# which is incompatible with main's flat-vector SoA layout.
+# if(CMAKE_CUDA_COMPILER)
+#     add_executable(CollisionTest
+#         src/CUDA/CollisionTest.cpp
+#         src/CUDA/CollisionCUDA.cu
+#         src/data/local/LocalEngine.cpp
+#         src/data/SimulationEngine.cpp
+#         src/thread/ReusableThread.cpp
+#     )
+#     set_target_properties(CollisionTest PROPERTIES
+#         CUDA_STANDARD 17
+#     )
+# endif()

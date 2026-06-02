@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
                   << "U_lid: " << U_lid << "\n"
                   << "===================================\n";
 
-        //runCavityBenchmark(N, Re, U_lid);
+        runCavityBenchmark(N, Re, U_lid);
     }
     else {
         // Making this default but later it should be opened with .\project_2_2_group_1.exe --ui
