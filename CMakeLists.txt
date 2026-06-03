@@ -142,7 +142,6 @@ if(BUILD_GUI)
         simulation_logic
         glfw
         OpenGL::GL
-        OpenMP::OpenMP_CXX
     )
 
     # Windows-specific networking libraries
@@ -158,10 +157,10 @@ else()
         simulation_logic
         Threads::Threads
     )
+endif()
 
-    if(OpenMP_CXX_FOUND)
-        target_link_libraries(project_2_2_group_1 OpenMP::OpenMP_CXX)
-    endif()
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(project_2_2_group_1 OpenMP::OpenMP_CXX)
 endif()
 
 # Testing
