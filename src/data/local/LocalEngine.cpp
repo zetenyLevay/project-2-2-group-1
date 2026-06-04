@@ -173,9 +173,12 @@ void LocalEngine::stepFoward() {
         // update heatSource back it its oringinal temperature and increment heat
         if (previousState.isConstantHeatSource) {
             for (int idx : previousState.heatSources) {
-                if(previousState.temperatures[idx] < MAX_TEMP){
-                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.008; // Reaches 55 at around 4500 frames which is about 15 minutes
+                nextState.temperatures[idx] = previousState.temperatures[idx];
+
+                if(nextState.temperatures[idx] < MAX_TEMP){
+                    nextState.temperatures[idx] += 0.008; // Reaches 55 at around 4500 frames which is about 15 minutes
                 }
+
                 for (int d = 0; d < 9; ++d) {
                     nextState.grid.g[d* cells + idx] = weights[d] * nextState.temperatures[idx];
                     nextState.grid.f[d* cells + idx] = weights[d] * 1.0; //a constant heat source should not have movement. It should radiate heat evenly
