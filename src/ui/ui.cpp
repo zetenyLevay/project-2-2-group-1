@@ -527,12 +527,17 @@ void launchGui() {
 
             double ratio = history->max_temp_history[state.current_step] / history->min_temp_history[state.current_step];
 
-
             // Plot real vectors
             // ImPlot takes the raw memory pointer (.data()) and the length of the array (.size())
             ImPlot::PlotLine("Max Temp (Hot Spot)", history->time_history.data(), history->max_temp_history.data(), history->time_history.size());
             ImPlot::PlotLine("Min Temp (Cold Spot)", history->time_history.data(), history->min_temp_history.data(), history->time_history.size());
 
+            // Average horizontal line
+            double currentTimeLimit = (state.current_step > 5 ? state.current_step + 1: 5);
+            double avgX[2] = {0.0, currentTimeLimit};
+            double avgY[2] = {average, average};
+
+            ImPlot::PlotLine("Latest Average", avgX, avgY, 2);
 
             // Time step marker
             if (!history->time_history.empty() && state.current_step < history->time_history.size()) {
