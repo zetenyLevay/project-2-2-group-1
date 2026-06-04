@@ -174,7 +174,7 @@ void LocalEngine::stepFoward() {
         if (previousState.isConstantHeatSource) {
             for (int idx : previousState.heatSources) {
                 if(previousState.temperatures[idx] < MAX_TEMP){
-                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.0005; // ORIGINAL: 0.0005
+                    nextState.temperatures[idx] = previousState.temperatures[idx] + 0.008;
                 }
                 for (int d = 0; d < 9; ++d) {
                     nextState.grid.g[d* cells + idx] = weights[d] * nextState.temperatures[idx];
