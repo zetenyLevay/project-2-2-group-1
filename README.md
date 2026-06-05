@@ -13,6 +13,8 @@ project_2_2_group_1/
 ├── CMakeLists.txt                  # Build configuration
 ├── README.md                       # Project documentation
 ├── benchmark_lbm.cpp               # OpenMP benchmark tool
+├── plotting/                       # Plots data from Lid-Driven Cavity test
+│   └── main.py
 ├── src/
 │   ├── main/
 │   │   ├── main.cpp                # GUI entry point (WebSocket + UI)
@@ -29,6 +31,9 @@ project_2_2_group_1/
 │   │   ├── SimulationEngine.h  
 │   │   ├── BatchRunner.cpp         # Batch simulation runner
 │   │   ├── BatchRunner.h    
+│   │   ├── cavity/                  # Lid-Driven Cavity accuracy test
+│   │   │   ├── LidDrivenCavity.cpp 
+│   │   │   └── LidDrivenCavity.h
 │   │   └── local/
 │   │       ├── LocalEngine.cpp     # LBM physics (collision, streaming)
 │   │       └── LocalEngine.h 
@@ -75,6 +80,7 @@ cmake --build .
 ```
 
 Then I either run a default batch (55°C and a constant heatsource) or you can specify these variables.
+
 Default:
 ``` bash
 ./project_2_2_group_1 --batch <width> <height> <NumberOfSims> <filename>
