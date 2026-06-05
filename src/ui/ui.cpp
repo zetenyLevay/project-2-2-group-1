@@ -394,7 +394,7 @@ void launchGui() {
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
                             history = engine->getReadOnlyHistory();
-                            MAX_TEMP = history->max_temp_history.front();
+                            MAX_TEMP = history->max_temp_history.back();
                             scaleMax = MAX_TEMP * 1.1;
 
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;

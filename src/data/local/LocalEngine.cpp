@@ -17,49 +17,21 @@
 LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : SimulationEngine(width, height) {
     auto initialState = std::make_unique<SimulationState>();
 
+    // Initialize Basic Variables
     initialState->width = width;
     initialState->height = height;
-
     auto cells = initialState->cells = width * height;
-
-    int numThreads = 1;
-    #ifdef _OPENMP
-    numThreads = omp_get_max_threads();
-    #endif
-    initialState->localFluxCache.resize(numThreads, std::vector<double>(cells, 0.0));
-    initialState->t4.resize(cells, 0.0);
-    initialState->grid = initialState->cells;
+    initialState->grid = Grid(cells);
     initialState->current_step = 0;
-    initialState->heat_spread = tau_g;
-    initialState->viscosity = lattice_kinematic_viscosity;
-    initialState->TempAvg=0.0;
-    initialState->heatSourceW = width * 0.1;
-    initialState->heatSourceH = height * 0.4;
-
-    // Set heatsources
-    // (x,y) = (0,0); the radiator's position
-    for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
-        for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
-            initialState->heatSources.push_back(getIndex(x,y));
-        }
-    }
-
-    //relaxation times for heat_spread and visocsity
-    //we are using 3 because we divide by cs2 which is 1/3
-    initialState->tauF = initialState->viscosity*3 +0.5;
-    initialState->tauT = initialState->heat_spread*3  +0.5;
-    initialState->TempAvg = 0.0;
     initialState->isConstantHeatSource = constantHeatSource;
+
+    // Initialize Physics
+    initPhysics(*initialState);
+
+    // Initialize Temperatures
     initialState->temperatures.resize(cells, ROOM_TEMP);
-    initialState->isRad.resize(cells, false);
 
-    // Set heatsource for frame 0
-    for (int idx : initialState->heatSources) {
-        initialState->temperatures[idx] = ROOM_TEMP;
-        initialState->isRad[idx] = true;
-    }
-
-    // Initialize Grid
+    // Initialize Grid (dont initialize in the physics function to avoid overwriting saves)
     double tempAvgLocal = 0.0;
     #ifdef _OPENMP
     #pragma omp parallel for reduction(+:tempAvgLocal)
@@ -73,8 +45,8 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     }
     initialState->TempAvg = tempAvgLocal / cells;
 
+    // Initialize history variables
     this->history = std::make_unique<SimulationHistory>();
-
     this->history->time_history.push_back(initialState->current_step);
     this->history->max_temp_history.push_back(ROOM_TEMP);
     this->history->min_temp_history.push_back(ROOM_TEMP);
@@ -82,12 +54,60 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     this->history->convectionOutput.push_back(0.0);
     this->history->radiationOutput.push_back(0.0);
 
+    // Launch the compute thread.
+    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
+}
+
+// Load simulation constructer 
+// Main Writer: Berke 
+// Reviewer: 
+// Contributers: Kristian
+LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h) {
+    // Initialize physics
+    initPhysics(*initialState);
+
+    // New average
+    double sum = 0.0;
+    for (double t : initialState->temperatures) {
+        sum += t;
+    }
+    initialState->TempAvg = sum / initialState->cells;
+    
+    this->history = std::move(initialHistory);
+    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
+}
+
+void LocalEngine::initPhysics(SimulationState& state) {
+    state.heat_spread = tau_g;
+    state.viscosity = lattice_kinematic_viscosity;
+    //relaxation times for heat_spread and visocsity
+    //we are using 3 because we divide by cs2 which is 1/3
+    state.tauF = state.viscosity*3 +0.5;
+    state.tauT = state.heat_spread*3  +0.5;
+    state.heatSourceW = width * 0.1;
+    state.heatSourceH = height * 0.4;
+    state.TempAvg = 0.0;
+
+    // Set heatsources
+    // (x,y) = (0,0); the radiator's position
+    state.heatSources.clear();
+    for (int y = radY; y < radY + state.heatSourceH && y < height; ++y) {
+        for (int x = radX; x < radX + state.heatSourceW && x < width; ++x) {
+            state.heatSources.push_back(getIndex(x,y));
+        }
+    }
+
+    state.isRad.resize(cells, false);
+    for (int idx : state.heatSources) {
+        state.isRad[idx] = true;
+    }
+
     std::vector<int> surfaceR;
-    for (int idx : initialState->heatSources) {
+    for (int idx : state.heatSources) {
         int rX = idx % width;
         int rY = idx / width;
 
-        bool isSurface = ((rX == radX) || (rX == radX + initialState->heatSourceW -1) || (rY == radY) || (rY == radY + initialState->heatSourceH -1));
+        bool isSurface = ((rX == radX) || (rX == radX + state.heatSourceW -1) || (rY == radY) || (rY == radY + state.heatSourceH -1));
 
         if (isSurface) {
             surfaceR.push_back(idx);
@@ -100,8 +120,8 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
         for (int x = 0; x < width; x++) {
             if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
                 // Ignore radiator cells
-                if (!initialState->isRad[getIndex(x,y)]) {
-                    initialState->boundaryCells.push_back(getIndex(x,y));
+                if (!state.isRad[getIndex(x,y)]) {
+                    state.boundaryCells.push_back(getIndex(x,y));
                 }
             }
         }
@@ -113,10 +133,10 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
         int radY = radIdx / width;
 
         double totalInverseDistance = 0.0;
-        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
+        std::vector<double> temp(state.boundaryCells.size(), 0.0);
 
-        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
-            int wallIdx = initialState->boundaryCells[i];
+        for (int i = 0; i < state.boundaryCells.size(); i++) {
+            int wallIdx = state.boundaryCells[i];
             int wallX = wallIdx % width;
             int wallY = wallIdx / width;
 
@@ -130,25 +150,24 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
             }
         }
 
-        for (int i = 0; i < initialState->boundaryCells.size(); i++) {
+        for (int i = 0; i < state.boundaryCells.size(); i++) {
             if (temp[i] > 0) {
                 ViewFactor vf;
                 vf.sourceIdx = radIdx;
-                vf.targetIdx = initialState->boundaryCells[i];
+                vf.targetIdx = state.boundaryCells[i];
                 vf.factor = temp[i] / totalInverseDistance;
-                initialState->viewFactors.push_back(vf);
+                state.viewFactors.push_back(vf);
             }
         }
     }
 
-    // Launch the compute thread.
-    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
-}
-
-LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h) {
-    this->history = std::move(initialHistory);
-    this->thread = std::make_unique<ReusableThread>(std::move(initialState));
-}
+    int numThreads = 1;
+    #ifdef _OPENMP
+    numThreads = omp_get_max_threads();
+    #endif
+    state.localFluxCache.resize(numThreads, std::vector<double>(cells, 0.0));
+    state.t4.resize(cells, 0.0);
+} 
 
 // Main Writer: Gecenio 
 // Reviewer: 
@@ -527,6 +546,12 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     std::unique_ptr<SimulationState> state = std::make_unique<SimulationState>();
     std::unique_ptr<SimulationHistory> history = std::make_unique<SimulationHistory>();
 
+    state->width = w;
+    state->height = h;
+    state->cells = w * h;
+    state->isConstantHeatSource = constantHeat;
+    state->grid = Grid(state->cells);
+
     // Get history length
     size_t history_count;
     in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
@@ -546,10 +571,20 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
         in.read(reinterpret_cast<char*>(history->temperature_history[i].data()), state->cells * sizeof(double));
     }
 
+    // Get convection and radiation history
+    history->convectionOutput.resize(history_count, 0.0);
+    history->radiationOutput.resize(history_count, 0.0);
+    in.read(reinterpret_cast<char*>(history->convectionOutput.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->radiationOutput.data()), history_count * sizeof(double));
 
-    // Write most recent grid
+    // Get most recent heat grid
     for (int d = 0; d < 9; ++d) {
         in.read(reinterpret_cast<char*>(state->grid.g.data() + d * state->cells), state->cells * sizeof(double));
+    }
+
+    // Get most recent fluid grid
+    for (int d = 0; d < 9; ++d) {
+        in.read(reinterpret_cast<char*>(state->grid.f.data() + d * state->cells), state->cells * sizeof(double));
     }
 
     // Go to the last frame of the sim
@@ -598,9 +633,18 @@ bool saveSimulation(const SimulationState& state, const SimulationHistory* histo
         out.write(reinterpret_cast<const char*>(history->temperature_history[i].data()), state.cells * sizeof(double));
     }
 
-    // Get most recent grid
+    // Write radiation and convection history
+    out.write(reinterpret_cast<const char*>(history->convectionOutput.data()), history_count * sizeof(double));
+    out.write(reinterpret_cast<const char*>(history->radiationOutput.data()), history_count * sizeof(double));
+
+    // Write most recent heat grid
     for (int d = 0; d < 9; ++d) {
-        out.write(reinterpret_cast<const char*>(state.grid.g.data()+ d * state.cells), state.cells * sizeof(double));
+        out.write(reinterpret_cast<const char*>(state.grid.g.data() + d * state.cells), state.cells * sizeof(double));
+    }
+
+    // Write most recent fluid grid
+    for (int d = 0; d < 9; ++d) {
+        out.write(reinterpret_cast<const char*>(state.grid.f.data() + d * state.cells), state.cells * sizeof(double));
     }
 
     out.close();
