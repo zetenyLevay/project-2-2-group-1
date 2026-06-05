@@ -77,6 +77,9 @@ LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<
     this->thread = std::make_unique<ReusableThread>(std::move(initialState));
 }
 
+// Main Writer: Kristian 
+// Reviewer: 
+// Contributers: 
 void LocalEngine::initPhysics(SimulationState& state) {
     state.heat_spread = tau_g;
     state.viscosity = lattice_kinematic_viscosity;
@@ -195,7 +198,7 @@ void LocalEngine::stepFoward() {
                 nextState.temperatures[idx] = previousState.temperatures[idx];
 
                 if(nextState.temperatures[idx] < MAX_TEMP){
-                    nextState.temperatures[idx] += 0.008; // Reaches 55 at around 4500 frames which is about 15 minutes
+                    nextState.temperatures[idx] += 0.003888; // Reaches 55 at around 9000 frames which is about 30 minutes
                 }
 
                 for (int d = 0; d < 9; ++d) {
