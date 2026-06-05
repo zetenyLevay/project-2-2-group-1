@@ -24,14 +24,17 @@ project_2_2_group_1/
 │   ├── thread/   
 │   │   ├── ReusableThread.cpp      # Thread logic         
 │   │   └── ReusableThread.h     
-│   └── data/   
-│       ├── SimulationEngine.cpp    # Base simulation engine       
-│       ├── SimulationEngine.h  
-│       ├── BatchRunner.cpp         # Batch simulation runner
-│       ├── BatchRunner.h    
-│       └── local/
-│           ├── LocalEngine.cpp     # LBM physics (collision, streaming)
-│           └── LocalEngine.h    
+│   ├── data/   
+│   │   ├── SimulationEngine.cpp    # Base simulation engine       
+│   │   ├── SimulationEngine.h  
+│   │   ├── BatchRunner.cpp         # Batch simulation runner
+│   │   ├── BatchRunner.h    
+│   │   └── local/
+│   │       ├── LocalEngine.cpp     # LBM physics (collision, streaming)
+│   │       └── LocalEngine.h 
+│   └── CUDA/                       # Cuda logic
+│       ├── CollisionCUDA.cu        
+│       └── CollisionTest.cpp   
 ├── tests/
 │   └── test_stream.cpp             # Unit tests for streaming
 ├── saves/                          # Simulation save files (generated)
@@ -69,7 +72,17 @@ For running simulations on a cluster or headless system without OpenGL/display d
 mkdir build && cd build
 cmake .. -DBUILD_GUI=OFF
 cmake --build .
-./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
+```
+
+Then I either run a default batch (55°C and a constant heatsource) or you can specify these variables.
+Default:
+``` bash
+./project_2_2_group_1 --batch <width> <height> <NumberOfSims> <filename>
+```
+
+Advanced:
+``` bash
+./project_2_2_group_1 --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>
 ```
 
 ### OpenMP 5.0 GPU Offloading (cluster with NVIDIA GPU)
@@ -92,18 +105,25 @@ cmake --build .
 Launches a desktop window with a heatmap visualization, simulation controls (play/pause, step, timeline), temperature convergence graph, and save/load functionality.
 
 ### Batch Mode
-Runs simulations to equilibrium without any display, useful for data collection or cluster execution.
+Runs simulations until the room reaches 30°C without any display, useful for data collection or cluster execution. Again you can choose to specify certain variables or go with the default.
 
+Default:
 ``` bash
-./project_2_2_group_1 --batch <width> <height> <numberOfSims> <filename> <saveType>
+./project_2_2_group_1 --batch <width> <height> <NumberOfSims> <filename>
+```
+
+Advanced:
+``` bash
+./project_2_2_group_1 --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>
 ```
 
 | Argument | Description |
 |---|---|
 | `width`, `height` | Grid dimensions in cells |
+| `temperature` | The maximum heat the radiator will reach |
+| `constantHeat` | Choice between a constant heating radiator or one that dissipates |
 | `numberOfSims` | Number of independent simulations to run |
 | `filename` | Output file base name (saved to `saves/`) |
-| `saveType` | `0` = Necessary (temperatures only), `1` = Complete (full grid state) |
 
 ### Lid-Driven Cavity Benchmark (physics validation)
 Runs an isothermal lid-driven cavity simulation to steady state and exports centerline velocity profiles to CSV. This validates the LBM physics implementation against the reference data from **Ghia et al. (1982)**.
