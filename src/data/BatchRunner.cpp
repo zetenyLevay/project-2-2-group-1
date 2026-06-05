@@ -5,7 +5,7 @@
 
 // Main Writer: Kristian
 // Reviewer: 
-// Contributers:
+// Contributers: Berke
 std::thread runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
@@ -32,11 +32,10 @@ std::thread runSimulations(int width, int height, int temperature, bool constant
                     state = engine.getState();
                 }
 
-                double maxTemp = history->max_temp_history.back();
-                double minTemp = history->min_temp_history.back();
+               double average = state->TempAvg;
 
-                // The effective equilibream, no need to check for until it is exactly equal
-                if (std::abs(maxTemp - minTemp) < 0.1) {
+                // Check if the average is above 30.0, stop the simulation if so
+                if (average > 30.0) {
                     isComplete = true;
 
                     // Get the full path

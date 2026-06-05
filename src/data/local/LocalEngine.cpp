@@ -81,12 +81,23 @@ LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<
 // Reviewer: 
 // Contributers: 
 void LocalEngine::initPhysics(SimulationState& state) {
-    state.heat_spread = tau_g;
-    state.viscosity = lattice_kinematic_viscosity;
+    // Initialize physics constants
+    double cells_height = (double)height; 
+    state.lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
+    state.lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
+    state.lattice_kinematic_viscosity = prandtl_num*state.lattice_thermal_diffusivity;
+    state.tauT = 3*state.lattice_thermal_diffusivity+0.5;
+    state.tauF = 3*state.lattice_kinematic_viscosity+0.5;
+    state.delta_x = room_height/cells_height;
+    state.seconds_per_step = state.lattice_kinematic_viscosity*((state.delta_x*state.delta_x)/real_viscosity);
+    state.lattice_stefan_boltzmann = radiator_emissivity * kinematic_sigma * (state.seconds_per_step / state.delta_x); // Lattice version of stefan-boltzmann constant
+
+    state.heat_spread = state.tauT;
+    state.viscosity = state.lattice_kinematic_viscosity;
     //relaxation times for heat_spread and visocsity
     //we are using 3 because we divide by cs2 which is 1/3
-    state.tauF = state.viscosity*3 +0.5;
-    state.tauT = state.heat_spread*3  +0.5;
+    //state.tauF = state.viscosity*3 +0.5;
+    //state.tauT = state.heat_spread*3  +0.5;
     state.heatSourceW = width * 0.1;
     state.heatSourceH = height * 0.4;
     state.TempAvg = 0.0;
@@ -217,7 +228,7 @@ void LocalEngine::stepFoward() {
 
         // Physics Steps
         this->Radiation(previousState, nextState, gridTemp);
-        this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, gridTemp, previousState.grid);
+        this->Collision(previousState.tauT, previousState.TempAvg, previousState.tauF, previousState.lattice_buoyancy, gridTemp, previousState.grid);
         this->Stream(gridTemp, nextState.grid, previousState.isRad, nextState);
 
         double tempAvgLocal = 0.0;
@@ -304,7 +315,7 @@ double LocalEngine::getTotalEnergy() const {
 // Main Writer: Cosmin
 // Reviewer: 
 // Contributers: Gecenio, Zeteny
-void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, Grid& gridNew, const Grid &gridOld){
+void LocalEngine::Collision(double tauT,double TempAvg,double tauF, double lattice_buoyancy, Grid& gridNew, const Grid &gridOld){
     const int n_cells = cells;
     const int w = width;
     const int h = height;
@@ -357,11 +368,11 @@ void LocalEngine::Collision(double heat_spread,double TempAvg,double viscosity, 
             // Calculating the equilibrium function for every f inside of a cell and applying the collision to a new grid
             for (int d = 0; d < 9; ++d) {
                 double cuF = cx[d]*ux + cy[d]*uyF;
-                double forceTerm=weights[d] *(1.0- 0.5/tau_f)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
-                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/tau_f) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
+                double forceTerm=weights[d] *(1.0- 0.5/tauF)*(((cy[d] -uyF) * buoyancy)/cs2 + ((cx[d]*ux + cy[d]*uyF)*(cy[d] * buoyancy))/(cs2 *cs2));
+                f_new[d * n_cells + idx] = f_old[d * n_cells + idx] - (1.0/tauF) * (f_old[d * n_cells + idx] - weights[d] * density*(1 + cuF/cs2 + (cuF*cuF)/(2*cs2*cs2) -(ux*ux + uyF*uyF)/(2*cs2)))+forceTerm;
 
                 double cuT=cx[d]*ux + cy[d]*uy;
-                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/tau_g) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
+                g_new[d * n_cells + idx] = g_old[d * n_cells + idx] - (1.0/tauT) * (g_old[d * n_cells + idx] - weights[d] * temp * (1+ cuT/cs2));
             }
         }
     }
@@ -473,7 +484,7 @@ void LocalEngine::Radiation(const SimulationState& previousState, SimulationStat
             const auto& vf = previousState.viewFactors[i];
 
             // Stefan-Boltzmann law
-            double heatFlux = lattice_stefan_boltzmann * vf.factor * (nextState.t4[vf.sourceIdx] - nextState.t4[vf.targetIdx]);
+            double heatFlux = nextState.lattice_stefan_boltzmann * vf.factor * (nextState.t4[vf.sourceIdx] - nextState.t4[vf.targetIdx]);
 
             // Accounting for walls
             double wallHeatCapacity = 50.0;

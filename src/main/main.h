@@ -30,20 +30,13 @@ const double rayliegh_num = 1e7;
 const double prandtl_num = 0.71; // prandtl number of air
 const double cs = 1/sqrt(3); // lattice speed of sound
 const double cs2 = 1.0/3; // lattice speed of sound squared
-const double lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
-const double lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
-const double lattice_kinematic_viscosity = prandtl_num*lattice_thermal_diffusivity;
-const double tau_g = 3*lattice_thermal_diffusivity+0.5;
-const double tau_f = 3*lattice_kinematic_viscosity+0.5;
 const double real_viscosity = 1.5e-5;// kinematic viscosity of air at 20c in real life (m2/s)
-const double delta_x = room_height/cells_height;
-const double seconds_per_step = lattice_kinematic_viscosity*((delta_x*delta_x)/real_viscosity);
+
 
 const double stefan_boltzman = 5.67e-8;
 const double rho_cp_air = 1206.0; // Heat capacity of air at 20c
 const double kinematic_sigma = stefan_boltzman / rho_cp_air;
 const double radiator_emissivity = 0.4;
-const double lattice_stefan_boltzmann = radiator_emissivity* kinematic_sigma * (seconds_per_step / delta_x); // Lattice version of stefan-boltzmann constant
 
 // Directions
 const int cx[9] = {0,1,0,-1,0,1,-1,-1,1};

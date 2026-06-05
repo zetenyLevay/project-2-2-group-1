@@ -34,13 +34,21 @@ struct SimulationState {
     // Make grid default size 0.
     SimulationState(): grid(0) {}
 
-    // State Checks
+    // State Checks and physics variables
     int current_step;
     double heat_spread;
     double tauT; //relaxation time temeprature
     double viscosity;
     double tauF; //relaxation time fluid
     double TempAvg;
+    double lattice_thermal_diffusivity;
+    double lattice_buoyancy;
+    double lattice_kinematic_viscosity;
+    double tau_g;
+    double tau_f;
+    double delta_x;
+    double seconds_per_step;
+    double lattice_stefan_boltzmann;
 };
 
 struct SimulationHistory {
