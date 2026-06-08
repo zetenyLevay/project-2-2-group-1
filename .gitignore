@@ -61,3 +61,5 @@ imgui.ini
 build/
 saves/
 cmake/
+build-gui/
+build-nocuda/

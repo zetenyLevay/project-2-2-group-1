@@ -8,6 +8,7 @@ if(CMAKE_CUDA_COMPILER)
     message("CUDA enabled.")
     enable_language(CUDA)
     add_compile_definitions(CUDA_AVAILABLE=1)
+    set(CMAKE_CUDA_ARCHITECTURES 89)
 else()
     message("CUDA disabled.")
 endif()
@@ -105,6 +106,8 @@ add_library(simulation_logic
 
 if(CMAKE_CUDA_COMPILER)
     set(CUDA_SOURCES
+        src/data/local/gpu/CUDA/kernels.cu
+        src/data/local/gpu/CUDA/kernels.cuh
         src/data/local/gpu/CUDA/LocalCUDAEngine.cu
         src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
     )

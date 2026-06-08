@@ -42,9 +42,6 @@ std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSo
 
 }
 
-int defaultWidth = 500;
-int defaultHeight = 500;
-
 void startGui(DataSource source) {
     currentSource = source;
 
@@ -93,7 +90,6 @@ void launchGui() {
         // Shared pointer for some reason fixes the ui stuttering (REMOVE COMMENT LATER)
         const SimulationState& state = *(engine->getState());
 
-        std::shared_lock<std::shared_mutex> historyLock(engine->historyMutex);
         const SimulationHistory* history = engine->getReadOnlyHistory();
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -385,12 +381,12 @@ void launchGui() {
                 switch (currentSource) {
                     case DataSource::LOCAL_CUDA:
                         #if CUDA_AVAILABLE == 1
-                            loadedEngine = loadSimulation<LocalCUDAEngine>(selectedPath);
+                            loadedEngine = loadLocalCUDASimulation(selectedPath);
                         #else
                             std::cout << "Cuda requested but is not enabled in this build. This is a bug. CPU processing will be used.\n";
                         #endif
                     case DataSource::LOCAL:
-                        loadedEngine = loadSimulation<LocalEngine>(selectedPath);
+                        loadedEngine = loadLocalSimulation(selectedPath);
                 }
 
                 if (loadedEngine) {
@@ -584,8 +580,8 @@ void launchGui() {
         ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
         ImGui::Text("One time step real world equivalent: %.2f seconds ", seconds_per_step);
         ImGui::Text("Total real world time spent: %.2f seconds", seconds_per_step*state.current_step);
-        ImGui::Text("Thermal Relaxation Time: %.4f", thermal_relaxation_time);
-        ImGui::Text("Density Relaxation Time: %.4f", density_relaxation_time);
+        ImGui::Text("Thermal Relaxation Time (tau_g): %.4f", tau_g);
+        ImGui::Text("Density Relaxation Time (tau_f): %.4f", tau_f);
         ImGui::Text("Buyouncy: %.10f", lattice_buoyancy);
         ImGui::Text("Thermal diff: %.10f", lattice_thermal_diffusivity);
 

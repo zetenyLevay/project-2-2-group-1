@@ -2,25 +2,38 @@
 #include <thread>
 #include <cmath>
 #include <iostream>
+#include <chrono>
+
+#if CUDA_AVAILABLE == 1
+#include "local/gpu/CUDA/LocalCUDAEngine.cuh"
+#endif
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer:
 // Contributers:
 std::thread runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
             std::cout << "Starting Simulation " << i + 1 << " of " << NumberOfSims << std::endl;
-            
+
             // Set temperature
             MAX_TEMP = temperature;
-            
+
+#if CUDA_AVAILABLE == 1
+            LocalCUDAEngine engine(width, height, constantHeatSource);
+            engine.batchMode = true;
+#else
             LocalEngine engine(width, height, constantHeatSource);
-            bool isComplete = false; // The simulation is complete once the hot spot and cold spot are equal 
+#endif
+            bool isComplete = false;
             int expectedStep = 0;
 
             const SimulationHistory* history = engine.getReadOnlyHistory();
 
-            while (!isComplete) {
+            int stepCount = 0;
+            const int BENCH_STEPS = 100;
+            auto t_start = std::chrono::steady_clock::now();
+            while (!isComplete && stepCount < BENCH_STEPS) {
                 engine.stepFoward();
                 expectedStep++;
 
@@ -32,10 +45,11 @@ std::thread runSimulations(int width, int height, int temperature, bool constant
                     state = engine.getState();
                 }
 
+                stepCount++;
                 double maxTemp = history->max_temp_history.back();
                 double minTemp = history->min_temp_history.back();
 
-                // The effective equilibream, no need to check for until it is exactly equal
+                // The effective equilibrium
                 if (std::abs(maxTemp - minTemp) < 0.1) {
                     isComplete = true;
 
@@ -56,6 +70,11 @@ std::thread runSimulations(int width, int height, int temperature, bool constant
 
                 }
             }
+            auto t_end = std::chrono::steady_clock::now();
+            double elapsed = std::chrono::duration<double>(t_end - t_start).count();
+            std::cout << "Benchmark: " << stepCount << " steps in " << elapsed
+                      << "s = " << (stepCount / elapsed) << " steps/sec"
+                      << " = " << (elapsed * 1000.0 / stepCount) << " ms/step" << std::endl;
         }
         std::cout << "All Simulations Complete" << std::endl;
     });

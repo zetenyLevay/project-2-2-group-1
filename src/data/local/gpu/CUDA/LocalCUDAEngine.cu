@@ -2,42 +2,15 @@
 
 #include "./LocalCUDAEngine.cuh"
 #include <numeric>
+#include <cstring>
+#include <algorithm>
+#include <fstream>
+#include <iostream>
 
-// D2Q9 lattice constants in constant memory
-// Those are cached and broadcasted to all threads
-
-__constant__ double d_cx[9];
-__constant__ double d_cy[9];
-__constant__ double d_weights[9];
-__constant__ double d_cs2;
-__constant__ int    d_inv[9];
-
-bool cuda_initialized = false;
-
-void initCudaLattice() {
-    // Make sure the constant variables are only initialized once.
-    // Not sure if necessary.
-    if (cuda_initialized) return;
-    cuda_initialized = true;
-
-    const double h_cx[9]     = {0.0, 1.0, 0.0, -1.0, 0.0,  1.0, -1.0, -1.0,  1.0};
-    const double h_cy[9]     = {0.0, 0.0, 1.0,  0.0, -1.0, 1.0,  1.0, -1.0, -1.0};
-    const double h_weights[9]= {4.0/9.0,
-                                1.0/9.0, 1.0/9.0, 1.0/9.0, 1.0/9.0,
-                                1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0};
-    const int    h_inv[9]     = {0, 3, 4, 1, 2, 7, 8, 5, 6};
-    double h_cs2 = 1.0 / 3.0;
-
-    cudaMemcpyToSymbol(d_cx,      h_cx,      9 * sizeof(double));
-    cudaMemcpyToSymbol(d_cy,      h_cy,      9 * sizeof(double));
-    cudaMemcpyToSymbol(d_weights, h_weights, 9 * sizeof(double));
-    cudaMemcpyToSymbol(d_inv,     h_inv,     9 * sizeof(int));
-    cudaMemcpyToSymbol(d_cs2,     &h_cs2,    sizeof(double));
-}
 
 void LocalCUDAEngine::initializeCuda() {
     initCudaLattice();
-    
+
     size_t bytes = this->n_vals * sizeof(double);
     cudaMalloc(&this->g_src, bytes);
     cudaMalloc(&this->f_src, bytes);
@@ -45,180 +18,280 @@ void LocalCUDAEngine::initializeCuda() {
     cudaMalloc(&this->f_mid, bytes);
     cudaMalloc(&this->g_dst, bytes);
     cudaMalloc(&this->f_dst, bytes);
+
+    cudaMalloc(&this->d_temperatures, this->cells * sizeof(double));
+    cudaMalloc(&this->d_max_temp,     sizeof(double));
+    cudaMalloc(&this->d_min_temp,     sizeof(double));
+    cudaMalloc(&this->d_temp_sum,     sizeof(double));
+
+    cudaMalloc(&this->d_isRad, this->cells * sizeof(bool));
+
+    this->d_boundary_indices = nullptr;
+    this->d_rad_flux = nullptr;
+    this->d_t4 = nullptr;
+    this->d_cellToBoundary = nullptr;
+    this->d_vf_source = nullptr;
+    this->d_vf_target = nullptr;
+    this->d_vf_factor = nullptr;
+    this->d_total_radiation = nullptr;
+    this->n_boundary = 0;
+    this->n_viewFactors = 0;
+
+    cudaMallocHost(&this->h_pinned_temps, this->cells * sizeof(double));
 }
 
-LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource) : SimulationEngine(w, h), n_vals(9 * cells) {
+// Grid upload / download
+
+void LocalCUDAEngine::uploadInitialGrid() {
+    auto state = this->getState();
+    const Grid& grid = state->grid;
+    cudaMemcpy(this->g_src, grid.g.data(), this->n_vals * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(this->f_src, grid.f.data(), this->n_vals * sizeof(double), cudaMemcpyHostToDevice);
+}
+
+void LocalCUDAEngine::downloadFullGrid(Grid& grid) const {
+    cudaMemcpy(grid.g.data(), this->g_src, this->n_vals * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaMemcpy(grid.f.data(), this->f_src, this->n_vals * sizeof(double), cudaMemcpyDeviceToHost);
+}
+
+
+LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource)
+    : SimulationEngine(w, h), n_vals(9 * cells) {
     this->initializeCuda();
 
     auto initialState = std::make_unique<SimulationState>();
-
     initialState->width = w;
     initialState->height = h;
-
     auto cells = initialState->cells = w * h;
-
     initialState->grid = initialState->cells;
-
     initialState->current_step = 0;
-    initialState->heat_spread = thermal_relaxation_time;
+    initialState->heat_spread = tau_g;
     initialState->viscosity = lattice_kinematic_viscosity;
-    initialState->TempAvg=0.0;
-    initialState->heatSource=getIndex(initialState->width/2,0); // Set heat source
-    //relaxation times for heat_spread and visocsity
-    //we are using 3 because we divide by cs2 which is 1/3
-    initialState->tauF = initialState->viscosity*3 +0.5;
-    initialState->tauT = initialState->heat_spread*3  +0.5;
+    initialState->tauF = initialState->viscosity * 3 + 0.5;
+    initialState->tauT = initialState->heat_spread * 3 + 0.5;
     initialState->TempAvg = 0.0;
-    initialState->heatSource = getIndex(initialState->width/2,0); // Set heat source
+    initialState->heatSourceW = width * 0.1;
+    initialState->heatSourceH = height * 0.4;
     initialState->isConstantHeatSource = constantHeatSource;
-    initialState->temperatures.resize(cells, 20.0); // room temp assumption
+    initialState->temperatures.resize(cells, ROOM_TEMP);
+    initialState->isRad.resize(cells, false);
 
-    // Initialize Grid 
+    for (int y = radY; y < radY + initialState->heatSourceH && y < height; ++y) {
+        for (int x = radX; x < radX + initialState->heatSourceW && x < width; ++x) {
+            initialState->heatSources.push_back(getIndex(x, y));
+        }
+    }
+
+    for (int idx : initialState->heatSources) {
+        initialState->temperatures[idx] = ROOM_TEMP;
+        initialState->isRad[idx] = true;
+    }
+
+    double tempAvgLocal = 0.0;
     for (int i = 0; i < cells; i++) {
         for (int d = 0; d < 9; ++d) {
-            initialState->grid.g[d][i] = weights[d] * initialState->temperatures[i];
-            initialState->grid.f[d][i] = weights[d] *1.0; //initializing the flow of the fluid 
+            initialState->grid.g[d * cells + i] = weights[d] * initialState->temperatures[i];
+            initialState->grid.f[d * cells + i] = weights[d] * 1.0;
         }
-        initialState->TempAvg = initialState->TempAvg + initialState->temperatures[i];
+        tempAvgLocal += initialState->temperatures[i];
     }
-    initialState->TempAvg = initialState->TempAvg/cells;
+    initialState->TempAvg = tempAvgLocal / cells;
 
     this->history = std::make_unique<SimulationHistory>();
-
     this->history->time_history.push_back(initialState->current_step);
-    this->history->max_temp_history.push_back(MAX_TEMP);
+    this->history->max_temp_history.push_back(ROOM_TEMP);
     this->history->min_temp_history.push_back(ROOM_TEMP);
     this->history->temperature_history.push_back(initialState->temperatures);
+    this->history->convectionOutput.push_back(0.0);
+    this->history->radiationOutput.push_back(0.0);
 
-    // Launch the compute thread.
+    // Radiator surface cells
+    std::vector<int> surfaceR;
+    for (int idx : initialState->heatSources) {
+        int rX = idx % width;
+        int rY = idx / width;
+        bool isSurface = ((rX == radX) || (rX == radX + initialState->heatSourceW - 1) ||
+                          (rY == radY) || (rY == radY + initialState->heatSourceH - 1));
+        if (isSurface) surfaceR.push_back(idx);
+    }
+
+    // Boundary cells
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
+                if (!initialState->isRad[getIndex(x, y)]) {
+                    initialState->boundaryCells.push_back(getIndex(x, y));
+                }
+            }
+        }
+    }
+
+    initialState->cellToBoundary.resize(cells, -1);
+    for (size_t i = 0; i < initialState->boundaryCells.size(); ++i) {
+        initialState->cellToBoundary[initialState->boundaryCells[i]] = (int)i;
+    }
+
+    // View factors
+    initialState->localFluxCache.resize(1, std::vector<double>(cells, 0.0));
+    initialState->t4.resize(cells, 0.0);
+
+    for (int radIdx : surfaceR) {
+        int rX = radIdx % width;
+        int rY = radIdx / width;
+        double totalInverseDistance = 0.0;
+        std::vector<double> temp(initialState->boundaryCells.size(), 0.0);
+
+        for (size_t i = 0; i < initialState->boundaryCells.size(); i++) {
+            int wallIdx = initialState->boundaryCells[i];
+            int wallX = wallIdx % width;
+            int wallY = wallIdx / width;
+            double dist = std::sqrt(((rX - wallX) * (rX - wallX)) + ((rY - wallY) * (rY - wallY)));
+            if (dist > 0) {
+                temp[i] = 1.0 / dist;
+                totalInverseDistance += temp[i];
+            }
+        }
+
+        for (size_t i = 0; i < initialState->boundaryCells.size(); i++) {
+            if (temp[i] > 0) {
+                ViewFactor vf;
+                vf.sourceIdx = radIdx;
+                vf.targetIdx = initialState->boundaryCells[i];
+                vf.factor = temp[i] / totalInverseDistance;
+                initialState->viewFactors.push_back(vf);
+            }
+        }
+    }
+
+    // Allocate persistent GPU radiation buffers
+    this->n_boundary = initialState->boundaryCells.size();
+    this->n_viewFactors = initialState->viewFactors.size();
+
+    cudaMalloc(&this->d_t4, cells * sizeof(double));
+    cudaMalloc(&this->d_cellToBoundary, cells * sizeof(int));
+    cudaMalloc(&this->d_total_radiation, sizeof(double));
+
+    cudaMemcpy(this->d_cellToBoundary, initialState->cellToBoundary.data(),
+               cells * sizeof(int), cudaMemcpyHostToDevice);
+
+    if (this->n_boundary > 0) {
+        cudaMalloc(&this->d_boundary_indices, this->n_boundary * sizeof(int));
+        cudaMalloc(&this->d_rad_flux, this->n_boundary * sizeof(double));
+        cudaMemcpy(this->d_boundary_indices, initialState->boundaryCells.data(),
+                   this->n_boundary * sizeof(int), cudaMemcpyHostToDevice);
+    }
+
+    if (this->n_viewFactors > 0) {
+        std::vector<int> vf_source(this->n_viewFactors);
+        std::vector<int> vf_target(this->n_viewFactors);
+        std::vector<double> vf_factor(this->n_viewFactors);
+        for (int i = 0; i < this->n_viewFactors; ++i) {
+            vf_source[i] = initialState->viewFactors[i].sourceIdx;
+            vf_target[i] = initialState->viewFactors[i].targetIdx;
+            vf_factor[i] = initialState->viewFactors[i].factor;
+        }
+        cudaMalloc(&this->d_vf_source, this->n_viewFactors * sizeof(int));
+        cudaMalloc(&this->d_vf_target, this->n_viewFactors * sizeof(int));
+        cudaMalloc(&this->d_vf_factor, this->n_viewFactors * sizeof(double));
+        cudaMemcpy(this->d_vf_source, vf_source.data(),
+                   this->n_viewFactors * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(this->d_vf_target, vf_target.data(),
+                   this->n_viewFactors * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(this->d_vf_factor, vf_factor.data(),
+                   this->n_viewFactors * sizeof(double), cudaMemcpyHostToDevice);
+    }
+
+    // Thread must be created before uploadInitialGrid (getState needs it)
     this->thread = std::make_unique<ReusableThread>(std::move(initialState));
+
+    this->uploadInitialGrid();
+
+    cudaMemcpy(this->d_isRad, this->getState()->isRad.data(),
+               cells * sizeof(bool), cudaMemcpyHostToDevice);
+
+    // Calculate initial temperatures on GPU for launchRadiationFlux
+    this->launchReduce();
 }
 
-LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h), n_vals(9 * cells) {
+LocalCUDAEngine::LocalCUDAEngine(int w, int h, bool constantHeatSource,
+    std::unique_ptr<SimulationState> initialState,
+    std::unique_ptr<SimulationHistory> initialHistory)
+    : SimulationEngine(w, h), n_vals(9 * cells) {
     this->initializeCuda();
-
     this->history = std::move(initialHistory);
+
     this->thread = std::make_unique<ReusableThread>(std::move(initialState));
+
+    auto* state = this->getState();
+    this->n_boundary = state->boundaryCells.size();
+    this->n_viewFactors = state->viewFactors.size();
+
+    cudaMalloc(&this->d_t4, cells * sizeof(double));
+    cudaMalloc(&this->d_cellToBoundary, cells * sizeof(int));
+    cudaMalloc(&this->d_total_radiation, sizeof(double));
+
+    cudaMemcpy(this->d_cellToBoundary, state->cellToBoundary.data(),
+               cells * sizeof(int), cudaMemcpyHostToDevice);
+
+    if (this->n_boundary > 0) {
+        cudaMalloc(&this->d_boundary_indices, this->n_boundary * sizeof(int));
+        cudaMalloc(&this->d_rad_flux, this->n_boundary * sizeof(double));
+        cudaMemcpy(this->d_boundary_indices, state->boundaryCells.data(),
+                   this->n_boundary * sizeof(int), cudaMemcpyHostToDevice);
+    }
+
+    if (this->n_viewFactors > 0) {
+        std::vector<int> vf_source(this->n_viewFactors);
+        std::vector<int> vf_target(this->n_viewFactors);
+        std::vector<double> vf_factor(this->n_viewFactors);
+        for (int i = 0; i < this->n_viewFactors; ++i) {
+            vf_source[i] = state->viewFactors[i].sourceIdx;
+            vf_target[i] = state->viewFactors[i].targetIdx;
+            vf_factor[i] = state->viewFactors[i].factor;
+        }
+        cudaMalloc(&this->d_vf_source, this->n_viewFactors * sizeof(int));
+        cudaMalloc(&this->d_vf_target, this->n_viewFactors * sizeof(int));
+        cudaMalloc(&this->d_vf_factor, this->n_viewFactors * sizeof(double));
+        cudaMemcpy(this->d_vf_source, vf_source.data(),
+                   this->n_viewFactors * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(this->d_vf_target, vf_target.data(),
+                   this->n_viewFactors * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(this->d_vf_factor, vf_factor.data(),
+                   this->n_viewFactors * sizeof(double), cudaMemcpyHostToDevice);
+    }
+
+    this->uploadInitialGrid();
+    cudaMemcpy(this->d_isRad, state->isRad.data(),
+               cells * sizeof(bool), cudaMemcpyHostToDevice);
+    this->launchReduce();
 }
 
 LocalCUDAEngine::~LocalCUDAEngine() {
     cudaFree(this->g_src); cudaFree(this->f_src);
     cudaFree(this->g_mid); cudaFree(this->f_mid);
     cudaFree(this->g_dst); cudaFree(this->f_dst);
-}
-
-void LocalCUDAEngine::pack(const Grid& grid) {
-    for (int d = 0; d < 9; ++d) {
-        cudaMemcpy(this->g_src + d * this->cells, grid.g[d].data(), this->cells * sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(this->f_src + d * this->cells, grid.f[d].data(), this->cells * sizeof(double), cudaMemcpyHostToDevice);
-    }
-}
-
-// Device helpers
-__device__ void getDensityAndVelocity(const double* f_old, int idx, int n_cells,
-                                      double& density, double& ux, double& uy) {
-    density = 0.0;
-    ux = 0.0;
-    uy = 0.0;
-    for (int d = 0; d < 9; ++d) {
-        double val = f_old[d * n_cells + idx];
-        density += val;
-        ux += val * d_cx[d];
-        uy += val * d_cy[d];
-    }
-    if (density != 0.0) {
-        ux /= density;
-        uy /= density;
-    }
-}
-
-__global__ void collisionKernel(int height, int width,
-                                double tauT, double TempAvg, double tauF,
-                                double* g_new, double* f_new,
-                                const double* g_old, const double* f_old) {
-
-    int x = blockDim.x * blockIdx.x + threadIdx.x;
-    int y = blockDim.y * blockIdx.y + threadIdx.y;
-
-    if (x >= width || y >= height) return;
-
-    int n_cells = width * height;
-    int idx = y * width + x;
-
-    double inv_tauF = 1.0 / tauF;
-    double inv_tauT = 1.0 / tauT;
-    double inv_cs2 = 1.0 / d_cs2;
-    double inv_cs4 = inv_cs2 * inv_cs2;
-    double half_inv_tauF = 1.0 - 0.5 / tauF;
-
-    double density, ux, uy;
-    getDensityAndVelocity(f_old, idx, n_cells, density, ux, uy);
-
-    double temp = 0.0;
-    for (int d = 0; d < 9; ++d) {
-        temp += g_old[d * n_cells + idx];
-    }
-
-    double buoyancy = 4.0e-5 * (temp - TempAvg);
-    double uyF = (density != 0.0) ? uy + 0.5 * buoyancy : 0.0;
-
-    for (int d = 0; d < 9; ++d) {
-        int mem = d * n_cells + idx;
-
-        double cuF  = d_cx[d] * ux  + d_cy[d] * uyF;
-        double cuT  = d_cx[d] * ux  + d_cy[d] * uy;
-        double cuF2 = cuF * cuF;
-        double u2F  = ux * ux + uyF * uyF;
-
-        double feq = d_weights[d] * density *
-            (1.0 + cuF * inv_cs2 + cuF2 * 0.5 * inv_cs4 - u2F * 0.5 * inv_cs2);
-
-        double forceTerm = d_weights[d] * half_inv_tauF *
-            (((d_cy[d] - uy) * buoyancy) * inv_cs2 +
-             (cuF * (d_cy[d] * buoyancy)) * inv_cs4);
-
-        f_new[mem] = f_old[mem] - inv_tauF * (f_old[mem] - feq) + forceTerm;
-
-        double geq = d_weights[d] * temp * (1.0 + cuT * inv_cs2);
-        g_new[mem] = g_old[mem] - inv_tauT * (g_old[mem] - geq);
-    }
-}
-
-__global__ void streamKernel(int height, int width,
-                             double* g_new, double* f_new,
-                             const double* g_old, const double* f_old) {
-
-    int x = blockDim.x * blockIdx.x + threadIdx.x;
-    int y = blockDim.y * blockIdx.y + threadIdx.y;
-
-    if (x >= width || y >= height) return;
-
-    int n_cells = width * height;
-    int idx = y * width + x;
-
-    for (int d = 0; d < 9; ++d) {
-        int srcX = x - (int)d_cx[d];
-        int srcY = y - (int)d_cy[d];
-        int mem = d * n_cells + idx;
-
-        if (srcX >= 0 && srcY >= 0 && srcX < width && srcY < height) {
-            int srcIdx = srcY * width + srcX;
-            int srcMem = d * n_cells + srcIdx;
-            g_new[mem] = g_old[srcMem];
-            f_new[mem] = f_old[srcMem];
-        } else {
-            int opp = d_inv[d];
-            int oppMem = opp * n_cells + idx;
-            g_new[mem] = g_old[oppMem];
-            f_new[mem] = f_old[oppMem];
-        }
-    }
+    cudaFree(this->d_temperatures);
+    cudaFree(this->d_max_temp);
+    cudaFree(this->d_min_temp);
+    cudaFree(this->d_temp_sum);
+    cudaFree(this->d_isRad);
+    if (this->d_boundary_indices) cudaFree(this->d_boundary_indices);
+    if (this->d_rad_flux) cudaFree(this->d_rad_flux);
+    if (this->d_t4) cudaFree(this->d_t4);
+    if (this->d_cellToBoundary) cudaFree(this->d_cellToBoundary);
+    if (this->d_vf_source) cudaFree(this->d_vf_source);
+    if (this->d_vf_target) cudaFree(this->d_vf_target);
+    if (this->d_vf_factor) cudaFree(this->d_vf_factor);
+    if (this->d_total_radiation) cudaFree(this->d_total_radiation);
+    cudaFreeHost(this->h_pinned_temps);
 }
 
 
-void LocalCUDAEngine::collision(const double tauT, const double TempAvg, const double tauF) {
+
+void LocalCUDAEngine::collision(const double tauT, const double TempAvg,
+                                const double tauF) {
     dim3 block(16, 16);
-    dim3 grid((this->width + block.x - 1) / block.x,
+    dim3 grid((this->width  + block.x - 1) / block.x,
               (this->height + block.y - 1) / block.y);
 
     collisionKernel<<<grid, block>>>(this->height, this->width,
@@ -227,7 +300,6 @@ void LocalCUDAEngine::collision(const double tauT, const double TempAvg, const d
                                      this->g_src, this->f_src);
 
     cudaError_t err = cudaDeviceSynchronize();
-
     if (err != cudaSuccess) {
         fprintf(stderr, "collisionKernel error: %s\n", cudaGetErrorString(err));
         exit(1);
@@ -236,141 +308,242 @@ void LocalCUDAEngine::collision(const double tauT, const double TempAvg, const d
 
 void LocalCUDAEngine::stream() {
     dim3 block(16, 16);
-    dim3 grid((this->width + block.x - 1) / block.x,
+    dim3 grid((this->width  + block.x - 1) / block.x,
               (this->height + block.y - 1) / block.y);
 
     streamKernel<<<grid, block>>>(this->height, this->width,
                                   this->g_dst, this->f_dst,
-                                  this->g_mid, this->f_mid);
+                                  this->g_mid, this->f_mid,
+                                  this->d_isRad);
 
     cudaError_t err = cudaDeviceSynchronize();
-
     if (err != cudaSuccess) {
         fprintf(stderr, "streamKernel error: %s\n", cudaGetErrorString(err));
         exit(1);
     }
 }
 
-void LocalCUDAEngine::unpack(Grid& grid) const {
-    for (int d = 0; d < 9; ++d) {
-        cudaMemcpy(grid.g[d].data(), g_dst + d * cells, cells * sizeof(double), cudaMemcpyDeviceToHost);
-        cudaMemcpy(grid.f[d].data(), f_dst + d * cells, cells * sizeof(double), cudaMemcpyDeviceToHost);
-    }
+void LocalCUDAEngine::launchReduce() {
+    initScalarsKernel<<<1, 1>>>(this->d_max_temp, this->d_min_temp,
+                                 this->d_temp_sum);
+    reduceTemperatureKernel<<<256, 256>>>(
+        this->cells, this->g_src,
+        this->d_temperatures,
+        this->d_max_temp, this->d_min_temp, this->d_temp_sum);
+    cudaDeviceSynchronize();
 }
 
-void LocalCUDAEngine::stepFoward() {
-    thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
-        // If already calculated just set the grid and temperatures again 
-        if (previousState.current_step < this->history->temperature_history.size() - 1) {
-            nextState.current_step = previousState.current_step + 1;
-            nextState.temperatures = this->history->temperature_history[nextState.current_step];
+void LocalCUDAEngine::launchHeatSourcePatch(const SimulationState& state) {
+    if (!state.isConstantHeatSource || state.heatSources.empty()) return;
 
-            // Auto play check
+    static bool uploaded = false;
+    static int* d_heatSources = nullptr;
+    static int d_nHeatSources = 0;
+
+    if (!uploaded) {
+        uploaded = true;
+        d_nHeatSources = state.heatSources.size();
+        cudaMalloc(&d_heatSources, d_nHeatSources * sizeof(int));
+        cudaMemcpy(d_heatSources, state.heatSources.data(),
+                   d_nHeatSources * sizeof(int), cudaMemcpyHostToDevice);
+    }
+
+    int threads = std::min(256, (int)state.heatSources.size());
+    int blocks = ((int)state.heatSources.size() + threads - 1) / threads;
+
+    heatSourcePatchKernel<<<blocks, threads>>>(
+        d_heatSources, (int)state.heatSources.size(),
+        MAX_TEMP, this->d_temperatures,
+        this->cells,
+        this->g_src, this->f_src);
+
+    cudaDeviceSynchronize();
+}
+
+void LocalCUDAEngine::launchRadiationFlux(const SimulationState& state) {
+    if (state.viewFactors.empty() || state.boundaryCells.empty()) return;
+
+    // Compute T^4 and radiation flux on CPU. cellToBoundary gives O(1) lookup.
+    std::vector<double> t4(state.cells);
+    for (int i = 0; i < state.cells; ++i) {
+        double tk = state.temperatures[i] + 273.15;
+        double tk2 = tk * tk;
+        t4[i] = tk2 * tk2;
+    }
+
+    std::vector<double> flux(state.boundaryCells.size(), 0.0);
+    double radiationThisStep = 0.0;
+
+    for (const auto& vf : state.viewFactors) {
+        double heatFlux = lattice_stefan_boltzmann * vf.factor *
+            (t4[vf.sourceIdx] - t4[vf.targetIdx]);
+        heatFlux /= 50.0;
+        radiationThisStep += heatFlux;
+
+        int bi = state.cellToBoundary[vf.targetIdx];
+        if (bi >= 0) flux[bi] += heatFlux;
+    }
+
+    history->radiationOutput.push_back(radiationThisStep);
+
+    cudaMemcpy(this->d_rad_flux, flux.data(),
+               this->n_boundary * sizeof(double), cudaMemcpyHostToDevice);
+
+    int threads = std::min(256, this->n_boundary);
+    int blocks = (this->n_boundary + threads - 1) / threads;
+    applyRadiationFluxKernel<<<blocks, threads>>>(
+        state.cells, this->d_boundary_indices, this->d_rad_flux,
+        this->n_boundary, this->g_src);
+
+    cudaDeviceSynchronize();
+}
+
+
+void LocalCUDAEngine::stepFoward() {
+    thread->submitTask([this](const SimulationState& previousState,
+                               SimulationState& nextState) {
+
+        if (previousState.current_step <
+            (int)this->history->temperature_history.size() - 1) {
+            nextState.current_step = previousState.current_step + 1;
+            nextState.temperatures =
+                this->history->temperature_history[nextState.current_step];
             if (this->getAutoPlayStatus()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 this->stepFoward();
             }
-
             return;
         }
 
-        // update heatSource back it its oringinal temperature
-        if (previousState.isConstantHeatSource) {
-            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
-                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-            }
-        }
+        // 1. Radiation (CPU T^4 + view factors, GPU apply)
+        this->launchRadiationFlux(previousState);
 
-        this->pack(previousState.grid);
-        this->collision(previousState.tauT, previousState.TempAvg, previousState.tauF);
+        // 2. Heat source patch (gradual heating on GPU)
+        this->launchHeatSourcePatch(previousState);
+
+        // 3-4. Collision -> Stream -> swap
+        this->collision(previousState.tauT, previousState.TempAvg,
+                        previousState.tauF);
         this->stream();
-        this->unpack(nextState.grid);
+        this->swapDeviceGrids();
 
-        double current_max = ROOM_TEMP;
-        double current_min = MAX_TEMP;
-        nextState.TempAvg=0.0;
-        for (int i = 0; i < cells; i++) {
-            double temp = 0.0;
+        // 5. Temperature reduction on GPU
+        this->launchReduce();
 
-            for (int d = 0; d < 9; ++d) {
-                temp += nextState.grid.g[d][i];
-            }
-            nextState.temperatures[i] = temp;
-            nextState.TempAvg += nextState.temperatures[i];
+        double current_max, current_min, temp_sum;
+        cudaMemcpy(&current_max, this->d_max_temp, sizeof(double),
+                   cudaMemcpyDeviceToHost);
+        cudaMemcpy(&current_min, this->d_min_temp, sizeof(double),
+                   cudaMemcpyDeviceToHost);
+        cudaMemcpy(&temp_sum,   this->d_temp_sum, sizeof(double),
+                   cudaMemcpyDeviceToHost);
 
-            // Find Max and Min for the graph
-            if (nextState.temperatures[i] > current_max) current_max = nextState.temperatures[i];
-            if (nextState.temperatures[i] < current_min) current_min = nextState.temperatures[i];
+        nextState.TempAvg = temp_sum / this->cells;
+
+        // 6. Download temperatures (skipped in batch mode)
+        if (!this->batchMode) {
+            cudaMemcpy(this->h_pinned_temps, this->d_temperatures,
+                       this->cells * sizeof(double), cudaMemcpyDeviceToHost);
+            nextState.temperatures.resize(this->cells);
+            std::memcpy(nextState.temperatures.data(), this->h_pinned_temps,
+                        this->cells * sizeof(double));
         }
-        nextState.TempAvg= nextState.TempAvg / cells;
 
-        //update heatSource back it its oringinal temperature
-        //doing it twice to ensure that the temperature reamins consitent and there is no flow
-        if (previousState.isConstantHeatSource) {
-            nextState.temperatures[previousState.heatSource] = MAX_TEMP;
-            for (int d = 0; d < 9; ++d) {
-                nextState.grid.g[d][previousState.heatSource] = weights[d] * previousState.temperatures[previousState.heatSource];
-                nextState.grid.f[d][previousState.heatSource] = weights[d] *1.0; //a constant heat source should not have movement. It should radiate heat evenly
-            }
-
-            if (nextState.temperatures[nextState.heatSource] > current_max) {
-                current_max = nextState.temperatures[nextState.heatSource];
-            }
-        }
+        // 7. History update
+        double previousEnergy = previousState.TempAvg * this->cells;
+        double currentEnergy = nextState.TempAvg * this->cells;
+        double totalEnergyOutput = currentEnergy - previousEnergy;
+        double convectionThisStep = totalEnergyOutput -
+            (history->radiationOutput.empty() ? 0.0 : history->radiationOutput.back());
+        history->convectionOutput.push_back(convectionThisStep);
 
         nextState.current_step = previousState.current_step + 1;
-        {
-            std::unique_lock<std::shared_mutex> lock(this->historyMutex);
-            this->history->time_history.push_back(nextState.current_step);
-            this->history->max_temp_history.push_back(current_max);
-            this->history->min_temp_history.push_back(current_min);
+        this->history->time_history.push_back(nextState.current_step);
+        this->history->max_temp_history.push_back(current_max);
+        this->history->min_temp_history.push_back(current_min);
+        if (!this->batchMode) {
             this->history->temperature_history.push_back(nextState.temperatures);
         }
 
-        // Auto play check
         if (this->getAutoPlayStatus()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
             this->stepFoward();
         }
     });
 }
 
-// Main Writer: Kristian
-// Reviewer:
-// Contributers:
 void LocalCUDAEngine::stepBack() {
-    thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
+    thread->submitTask([this](const SimulationState& previousState,
+                               SimulationState& nextState) {
         if (previousState.current_step <= 0) return;
-
         nextState.current_step = previousState.current_step - 1;
-        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.temperatures =
+            this->history->temperature_history[nextState.current_step];
         nextState.grid = previousState.grid;
     });
 }
 
-// Main Writer: Kristian
-// Reviewer:
-// Contributers:
-// Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalCUDAEngine::seekTo(int step) {
-    thread->submitTask([this, step](const SimulationState& previousState, SimulationState& nextState) {
-        if (step < 0 || step >= (int)this->history->temperature_history.size()) return;
-
+    thread->submitTask([this, step](const SimulationState& previousState,
+                                     SimulationState& nextState) {
+        if (step < 0 || step >= (int)this->history->temperature_history.size())
+            return;
         nextState.current_step = step;
-        nextState.temperatures = this->history->temperature_history[nextState.current_step];
+        nextState.temperatures =
+            this->history->temperature_history[nextState.current_step];
         nextState.grid = previousState.grid;
     });
 }
 
-// Main Writer: Gecenio
-// Reviewer:
-// Contributers:
 double LocalCUDAEngine::getTotalEnergy() const {
-    // Can't really make this run on a seperate thread without changing the function signature.
     auto state = thread->getState();
-    return std::accumulate(state->temperatures.begin(), state->temperatures.end(), 0.0);
+    return std::accumulate(state->temperatures.begin(),
+                           state->temperatures.end(), 0.0);
+}
+
+
+std::unique_ptr<LocalCUDAEngine> loadLocalCUDASimulation(const std::string& filepath) {
+    std::ifstream in(filepath, std::ios::binary);
+    if (!in.is_open()) {
+        std::cerr << "Failed to open file: " << filepath << std::endl;
+        return nullptr;
+    }
+
+    int w, h;
+    in.read(reinterpret_cast<char*>(&w), sizeof(w));
+    in.read(reinterpret_cast<char*>(&h), sizeof(h));
+
+    bool constantHeat;
+    in.read(reinterpret_cast<char*>(&constantHeat), sizeof(constantHeat));
+
+    auto state = std::make_unique<SimulationState>();
+    auto history = std::make_unique<SimulationHistory>();
+
+    size_t history_count;
+    in.read(reinterpret_cast<char*>(&history_count), sizeof(history_count));
+
+    history->time_history.resize(history_count);
+    history->max_temp_history.resize(history_count);
+    history->min_temp_history.resize(history_count);
+
+    in.read(reinterpret_cast<char*>(history->time_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->max_temp_history.data()), history_count * sizeof(double));
+    in.read(reinterpret_cast<char*>(history->min_temp_history.data()), history_count * sizeof(double));
+
+    history->temperature_history.resize(history_count, std::vector<double>(state->cells));
+    for (size_t i = 0; i < history_count; ++i) {
+        in.read(reinterpret_cast<char*>(history->temperature_history[i].data()), state->cells * sizeof(double));
+    }
+
+    for (int d = 0; d < 9; ++d) {
+        in.read(reinterpret_cast<char*>(state->grid.g.data() + d * state->cells), state->cells * sizeof(double));
+    }
+
+    if (history_count > 0) {
+        state->current_step = history->time_history.back();
+        state->temperatures = history->temperature_history.back();
+    }
+
+    in.close();
+    return std::make_unique<LocalCUDAEngine>(w, h, constantHeat, std::move(state), std::move(history));
 }
 
 #endif
