@@ -7,6 +7,9 @@
 #include <string>
 #include <cstdlib>
 
+// Main Writer: Gecenio
+// Reviewer: Kristian
+// Contributers: 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage:\n"

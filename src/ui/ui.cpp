@@ -49,7 +49,7 @@ void startGui(DataSource source) {
 }
 
 // Main Writer: Kristian/Gecenio/Berke
-// Reviewer: 
+// Reviewer: Kristian/Berke/Cosmin
 // Contributers: Zétény
 void launchGui() {
     // First, we need to initialize GLFW which is our window manager.
@@ -404,7 +404,7 @@ void launchGui() {
                         if (loadedEngine) {
                             engine = std::move(loadedEngine);
                             history = engine->getReadOnlyHistory();
-                            MAX_TEMP = history->max_temp_history.back();
+                            //MAX_TEMP = history->max_temp_history.back(); Causes bug
                             scaleMax = MAX_TEMP * 1.1;
 
                             std::cout << "Loaded new simulation from: " << selectedPath << std::endl;

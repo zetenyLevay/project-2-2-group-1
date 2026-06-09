@@ -8,8 +8,8 @@
 #endif
 
 // Main Writer: Kristian
-// Reviewer:
-// Contributers: Berke
+// Reviewer: Zeteny
+// Contributers: Berke, Gecenio
 std::thread runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {

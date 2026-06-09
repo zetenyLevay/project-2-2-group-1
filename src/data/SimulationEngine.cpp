@@ -1,7 +1,9 @@
+// Main Writer: Berke
+// Reviewer: Cosmin
+// Contributers: 
 #include "SimulationEngine.h"
 #include "../thread/ReusableThread.h"
 #include <stdexcept>
-
 
 SimulationEngine::SimulationEngine(int w, int h) : width(w), height(h), cells(w * h) {};
 

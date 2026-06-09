@@ -14,6 +14,8 @@ inline int defaultWidth = 500;
 inline int defaultHeight = 500;
 
 // Main Writer: Zétény
+// Reviewer: Cosmin
+// Contributers: Cosmin, Kristian
 // Physics constants
 // lb stands for lattice boltzmann unit
 inline double MAX_TEMP = 55.0;

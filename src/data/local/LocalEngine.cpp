@@ -12,7 +12,7 @@
 
 // Initialized on main thread
 // Main Writer: Berke/Kristian 
-// Reviewer: 
+// Reviewer: Cosmin/Zeteny
 // Contributers: 
 LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : SimulationEngine(width, height) {
     auto initialState = std::make_unique<SimulationState>();
@@ -60,7 +60,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 
 // Load simulation constructer 
 // Main Writer: Berke 
-// Reviewer: 
+// Reviewer: Cosmin/Zeteny
 // Contributers: Kristian
 LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h) {
     // Initialize physics
@@ -78,8 +78,8 @@ LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<
 }
 
 // Main Writer: Kristian 
-// Reviewer: 
-// Contributers: 
+// Reviewer: Cosmin/Zeteny
+// Contributers:
 void initPhysics(SimulationState& state, int width, int height) {
     // Initialize physics constants
     int cells = width * height;
@@ -220,7 +220,7 @@ void initPhysics(SimulationState& state, int width, int height) {
 }
 
 // Main Writer: Gecenio 
-// Reviewer: 
+// Reviewer: Cosmin/Zeteny
 // Contributers: Kristian, Berke
 void LocalEngine::stepFoward() {
     thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
@@ -308,7 +308,7 @@ void LocalEngine::stepFoward() {
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer: Cosmin/Zeteny
 // Contributers:
 void LocalEngine::stepBack() {
     thread->submitTask([this](const SimulationState& previousState, SimulationState& nextState) {
@@ -323,7 +323,7 @@ void LocalEngine::stepBack() {
 }
 
 // Main Writer: Kristian
-// Reviewer:
+// Reviewer: Berke
 // Contributers:
 // Used by the timeline to change the simulation window (basically the same as stepback but goes to a particular step)
 void LocalEngine::seekTo(int step) {
@@ -337,7 +337,7 @@ void LocalEngine::seekTo(int step) {
 }
 
 // Main Writer: Gecenio
-// Reviewer:
+// Reviewer: Cosmin/Zeteny
 // Contributers:
 double LocalEngine::getTotalEnergy() const {
     // Can't really make this run on a seperate thread without changing the function signature.
@@ -349,7 +349,7 @@ double LocalEngine::getTotalEnergy() const {
 // Physics Functions (LBM)
 // I will assume these functions are already running on the compute thread.
 // Main Writer: Cosmin
-// Reviewer: 
+// Reviewer: Ilie
 // Contributers: Gecenio, Zeteny
 void LocalEngine::Collision(double tauT,double TempAvg,double tauF, double lattice_buoyancy, Grid& gridNew, const Grid &gridOld){
     const int n_cells = cells;
@@ -415,7 +415,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, double latti
 }
 
 // Main Writer: Gecenio
-// Reviewer: 
+// Reviewer: Ilie
 // Contributers: Cosmin, Zeteny
 void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<char>& isRad, SimulationState& state) {
     const int n_cells = cells;
@@ -484,7 +484,7 @@ void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<char>& 
 }
 
 // Main Writer: Kristian
-// Reviewer:
+// Reviewer: Cosmin/Zeteny
 // Contributers:
 void LocalEngine::Radiation(const SimulationState& previousState, SimulationState& nextState, Grid& targetGrid) {
     double radiationThisStep = 0.0;
@@ -555,7 +555,7 @@ void LocalEngine::Radiation(const SimulationState& previousState, SimulationStat
 }
 
 // Main Writer: Cosmin
-// Reviewer: 
+// Reviewer: Zeteny
 // Contributers: 
 std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int idx){
     double density = 0.0;
@@ -576,7 +576,7 @@ std::array<double, 3> LocalEngine::getDensityAndVelocity(const Grid& gridOld,int
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer: Berke
 // Contributers: 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
     std::ifstream in(filepath, std::ios::binary);
@@ -648,7 +648,7 @@ std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath) {
 }
 
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer: Berke
 // Contributers: 
 bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath) {
     std::filesystem::path pathObj(filepath);
