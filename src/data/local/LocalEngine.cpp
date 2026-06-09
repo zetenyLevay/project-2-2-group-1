@@ -365,7 +365,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, double latti
     #pragma omp target teams distribute parallel for collapse(2) \
         map(to: g_old[:9*n_cells], f_old[:9*n_cells]) \
         map(from: g_new[:9*n_cells], f_new[:9*n_cells]) \
-        firstprivate(n_cells, w, h, heat_spread, TempAvg, viscosity)
+        firstprivate(n_cells, w, h, tauT, TempAvg, tauF)
 #else
     const double* g_old = gridOld.g.data();
     const double* f_old = gridOld.f.data();
