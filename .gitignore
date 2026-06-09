@@ -58,6 +58,6 @@ imgui.ini
 # macos trash
 .DS_Store
 
-build/
+build*/
 saves/
 cmake/

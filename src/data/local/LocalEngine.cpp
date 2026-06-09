@@ -26,7 +26,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
     initialState->isConstantHeatSource = constantHeatSource;
 
     // Initialize Physics
-    initPhysics(*initialState);
+    initPhysics(*initialState, width, height);
 
     // Initialize Temperatures
     initialState->temperatures.resize(cells, ROOM_TEMP);
@@ -64,7 +64,7 @@ LocalEngine::LocalEngine(int width, int height, bool constantHeatSource) : Simul
 // Contributers: Kristian
 LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<SimulationState> initialState, std::unique_ptr<SimulationHistory> initialHistory): SimulationEngine(w, h) {
     // Initialize physics
-    initPhysics(*initialState);
+    initPhysics(*initialState, w, h);
 
     // New average
     double sum = 0.0;
@@ -80,9 +80,10 @@ LocalEngine::LocalEngine(int w, int h, bool constantHeatSource, std::unique_ptr<
 // Main Writer: Kristian 
 // Reviewer: 
 // Contributers: 
-void LocalEngine::initPhysics(SimulationState& state) {
+void initPhysics(SimulationState& state, int width, int height) {
     // Initialize physics constants
-    double cells_height = (double)height; 
+    int cells = width * height;
+    double cells_height = (double)height;
     state.lattice_thermal_diffusivity = (cells_height*mach_number*cs)/(sqrt(rayliegh_num*prandtl_num));
     state.lattice_buoyancy = (mach_number*mach_number*cs2)/(delta_T*cells_height);
     state.lattice_kinematic_viscosity = prandtl_num*state.lattice_thermal_diffusivity;
@@ -107,7 +108,7 @@ void LocalEngine::initPhysics(SimulationState& state) {
     state.heatSources.clear();
     for (int y = radY; y < radY + state.heatSourceH && y < height; ++y) {
         for (int x = radX; x < radX + state.heatSourceW && x < width; ++x) {
-            state.heatSources.push_back(getIndex(x,y));
+            state.heatSources.push_back(y * width + x);
         }
     }
 
@@ -134,11 +135,17 @@ void LocalEngine::initPhysics(SimulationState& state) {
         for (int x = 0; x < width; x++) {
             if (x == 0 || x == width - 1 || y == 0 || y == height - 1) {
                 // Ignore radiator cells
-                if (!state.isRad[getIndex(x,y)]) {
-                    state.boundaryCells.push_back(getIndex(x,y));
+                if (!state.isRad[y * width + x]) {
+                    state.boundaryCells.push_back(y * width + x);
                 }
             }
         }
+    }
+
+    // Build cell to boundary index map for O(1) flux lookup
+    state.cellToBoundary.resize(cells, -1);
+    for (size_t i = 0; i < state.boundaryCells.size(); ++i) {
+        state.cellToBoundary[state.boundaryCells[i]] = (int)i;
     }
 
     // Calculate View Factors (For each radiator cell, the distance from it to the wall)
@@ -175,13 +182,42 @@ void LocalEngine::initPhysics(SimulationState& state) {
         }
     }
 
+    // Build CSR (Compressed Sparse Row) layout for coalesced GPU radiation.
+    // Groups view factors by target boundary cell so each GPU thread can
+    // sum its contributions sequentially with zero atomic operations
+    {
+        int nb = (int)state.boundaryCells.size();
+        std::vector<int> counts(nb, 0);
+        for (const auto& vf : state.viewFactors) {
+            int bi = state.cellToBoundary[vf.targetIdx];
+            if (bi >= 0) counts[bi]++;
+        }
+        state.boundaryVFStart.resize(nb + 1, 0);
+        for (int i = 0; i < nb; ++i)
+            state.boundaryVFStart[i + 1] = state.boundaryVFStart[i] + counts[i];
+
+        int total = state.boundaryVFStart.back();
+        state.vfSourceCSR.resize(total);
+        state.vfFactorCSR.resize(total);
+        std::vector<int> cursor(nb, 0);
+        for (const auto& vf : state.viewFactors) {
+            int bi = state.cellToBoundary[vf.targetIdx];
+            if (bi >= 0) {
+                int pos = state.boundaryVFStart[bi] + cursor[bi];
+                state.vfSourceCSR[pos] = vf.sourceIdx;
+                state.vfFactorCSR[pos] = vf.factor;
+                cursor[bi]++;
+            }
+        }
+    }
+
     int numThreads = 1;
     #ifdef _OPENMP
     numThreads = omp_get_max_threads();
     #endif
     state.localFluxCache.resize(numThreads, std::vector<double>(cells, 0.0));
     state.t4.resize(cells, 0.0);
-} 
+}
 
 // Main Writer: Gecenio 
 // Reviewer: 
@@ -381,7 +417,7 @@ void LocalEngine::Collision(double tauT,double TempAvg,double tauF, double latti
 // Main Writer: Gecenio
 // Reviewer: 
 // Contributers: Cosmin, Zeteny
-void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& isRad, SimulationState& state) {
+void LocalEngine::Stream(Grid &gridOld, Grid &gridNew, const std::vector<char>& isRad, SimulationState& state) {
     const int n_cells = cells;
     const int w = width;
     const int h = height;

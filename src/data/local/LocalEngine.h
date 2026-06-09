@@ -40,13 +40,13 @@ public:
     // Physics functions
     void Radiation(const SimulationState& previousState, SimulationState& nextState, Grid& targetGrid);
     void Collision(double tauT,double TempAvg,double tauF, double lattice_buoyancy, Grid& gridNew, const Grid &gridOld);
-    void Stream(Grid &gridOld, Grid &gridNew, const std::vector<bool>& isRad, SimulationState& state);
+    void Stream(Grid &gridOld, Grid &gridNew, const std::vector<char>& isRad, SimulationState& state);
 
     std::array<double, 3> getDensityAndVelocity(const Grid& grid,int idx);
-
-    private:
-        void initPhysics(SimulationState& state);
 };
+
+// Shared physics initialization (called by both LocalEngine and LocalCUDAEngine)
+void initPhysics(SimulationState& state, int width, int height);
 
 std::unique_ptr<LocalEngine> loadLocalSimulation(const std::string& filepath);
 bool saveSimulation(const SimulationState& state, const SimulationHistory* history, const std::string& filepath);

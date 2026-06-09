@@ -1,3 +1,11 @@
+// LBM Benchmark 
+// Measures MLUPS across CPU serial, CPU OpenMP, GPU CUDA
+//
+// Usage:
+//   ./benchmark_lbm --engine cpu|openmp|cuda --width W --height H [--steps N] [--warmup M] [--repeat R]
+//
+// Output: one line per run with MLUPS, then summary with mean ± stddev
+
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -5,8 +13,16 @@
 #include <iomanip>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
+
 #include "src/main/main.h"
 #include "src/data/local/LocalEngine.h"
+#include "src/thread/ReusableThread.h"
+
+#if CUDA_AVAILABLE == 1
+#include "src/data/local/gpu/CUDA/LocalCUDAEngine.cuh"
+#include "src/data/local/gpu/CUDA/LocalCUDAEngineAoS.cuh"
+#endif
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -15,189 +31,211 @@
 using namespace std;
 using namespace std::chrono;
 
-// Function to set number of OpenMP threads
-void set_omp_threads(int threads) {
-#ifdef _OPENMP
-    omp_set_num_threads(threads);
+enum class EngineType { CPU, OPENMP, CUDA, CUDA_AOS };
+
+struct BenchmarkConfig {
+    EngineType engine = EngineType::CPU;
+    int width = 128;
+    int height = 128;
+    int warmup_steps = 50;
+    int bench_steps = 500;
+    int repeats = 3;
+    bool csv_output = false;
+    bool no_physics = false;  // skip radiation/heat/reduce for raw LBM comparison
+};
+
+struct BenchmarkResult {
+    double time_seconds;
+    double mlups;
+};
+
+// Engine factory
+
+static unique_ptr<SimulationEngine> create_engine(EngineType type, int w, int h) {
+    const bool constHeat = true;
+    switch (type) {
+        case EngineType::CPU:
+        case EngineType::OPENMP:
+            return make_unique<LocalEngine>(w, h, constHeat);
+        case EngineType::CUDA:
+#if CUDA_AVAILABLE == 1
+            {
+                auto e = make_unique<LocalCUDAEngine>(w, h, constHeat);
+                e->batchMode = true;
+                return e;
+            }
 #else
-    (void)threads;
+            cerr << "CUDA not available in this build." << endl;
+            exit(1);
 #endif
-}
-
-// Get current number of OpenMP threads
-int get_omp_threads() {
-#ifdef _OPENMP
-    return omp_get_max_threads();
+        case EngineType::CUDA_AOS:
+#if CUDA_AVAILABLE == 1
+            {
+                auto e = make_unique<LocalCUDAEngineAoS>(w, h, constHeat);
+                e->batchMode = true;
+                return e;
+            }
 #else
-    return 1;
+            cerr << "CUDA not available in this build." << endl;
+            exit(1);
 #endif
-}
-
-double measure_simulation(int width, int height, int steps, int thread_count) {
-    // Set thread count for this run
-    set_omp_threads(thread_count);
-
-    // Create engine
-    LocalEngine engine(width, height, true);
-
-    // Warmup
-    for (int i = 0; i < 3; ++i) {
-        engine.stepFoward();
-        // Wait for computation to finish
-        auto state = engine.getState();
-        while (state->current_step < i + 1) {
-            state = engine.getState();
-        }
+        default:
+            cerr << "Unknown engine type." << endl;
+            exit(1);
     }
+}
 
-    // Actual benchmark
-    auto start = high_resolution_clock::now();
+// Run N steps and measure wall time
+
+BenchmarkResult run_steps(SimulationEngine& engine, int steps, int expected_start) {
+    auto t0 = high_resolution_clock::now();
 
     for (int i = 0; i < steps; ++i) {
         engine.stepFoward();
-        // Wait for computation to finish
+        // Wait for compute thread to finish
         auto state = engine.getState();
-        while (state->current_step < i + 3 + 1) { // 3 warm-up steps already done
+        while (state->current_step < expected_start + i + 1) {
+            this_thread::yield();
             state = engine.getState();
         }
     }
 
-    auto end = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(end - start);
+    auto t1 = high_resolution_clock::now();
+    double elapsed = duration<double>(t1 - t0).count();
 
-    return duration.count() / 1e6; // Return time in seconds
+    BenchmarkResult result;
+    result.time_seconds = elapsed;
+    return result;
 }
 
-void run_benchmark(int width, int height, int steps, int thread_count) {
-    string label;
-    if (thread_count == 1) {
-        label = "Sequential";
-    } else {
-        label = "OpenMP (" + to_string(thread_count) + " threads)";
+// ---- Full benchmark run (warmup + timed) ----
+
+BenchmarkResult benchmark_run(const BenchmarkConfig& cfg) {
+    auto engine = create_engine(cfg.engine, cfg.width, cfg.height);
+    int cells = cfg.width * cfg.height;
+
+    // Warmup (GPU JIT + cache warmup)
+    if (cfg.warmup_steps > 0) {
+        run_steps(*engine, cfg.warmup_steps, 0);
     }
 
-    cout << "\n=== " << label << " Benchmark ===" << endl;
-    cout << "Grid size: " << width << "x" << height << " (" << width*height << " cells)" << endl;
-    cout << "Simulation steps: " << steps << endl;
-    cout << "Thread count: " << thread_count << endl;
+    // Timed run
+    auto result = run_steps(*engine, cfg.bench_steps, cfg.warmup_steps);
+    result.mlups = (cells * (double)cfg.bench_steps) / (result.time_seconds * 1e6);
 
-    // Run benchmark multiple times for more accurate results
-    const int runs = 5;
-    vector<double> times;
+    // Shut down compute thread cleanly
+    engine->thread->terminate();
+    return result;
+}
 
-    for (int run = 0; run < runs; ++run) {
-        cout << "Run " << run+1 << "/" << runs << "... ";
-        cout.flush();
+// ---- CLI parsing ----
 
-        double time = measure_simulation(width, height, steps, thread_count);
-        times.push_back(time);
-
-        cout << fixed << setprecision(3) << time << " seconds" << endl;
+BenchmarkConfig parse_args(int argc, char* argv[]) {
+    BenchmarkConfig cfg;
+    for (int i = 1; i < argc; ++i) {
+        string arg = argv[i];
+        if (arg == "--engine" && i + 1 < argc) {
+            string val = argv[++i];
+            if (val == "cpu")      cfg.engine = EngineType::CPU;
+            else if (val == "openmp") cfg.engine = EngineType::OPENMP;
+            else if (val == "cuda")      cfg.engine = EngineType::CUDA;
+            else if (val == "cuda-aos")  cfg.engine = EngineType::CUDA_AOS;
+            else { cerr << "Unknown engine: " << val << endl; exit(1); }
+        } else if (arg == "--width" && i + 1 < argc) {
+            cfg.width = atoi(argv[++i]);
+        } else if (arg == "--height" && i + 1 < argc) {
+            cfg.height = atoi(argv[++i]);
+        } else if (arg == "--steps" && i + 1 < argc) {
+            cfg.bench_steps = atoi(argv[++i]);
+        } else if (arg == "--warmup" && i + 1 < argc) {
+            cfg.warmup_steps = atoi(argv[++i]);
+        } else if (arg == "--repeat" && i + 1 < argc) {
+            cfg.repeats = atoi(argv[++i]);
+        } else if (arg == "--csv") {
+            cfg.csv_output = true;
+        }
     }
+    return cfg;
+}
 
-    // Calculate statistics
-    double sum = 0.0;
-    double min_time = times[0];
-    double max_time = times[0];
-
-    for (double t : times) {
-        sum += t;
-        if (t < min_time) min_time = t;
-        if (t > max_time) max_time = t;
-    }
-
-    double avg = sum / runs;
-    double stddev = 0.0;
-    for (double t : times) {
-        stddev += (t - avg) * (t - avg);
-    }
-    stddev = sqrt(stddev / runs);
-
-    cout << "\nResults:" << endl;
-    cout << "  Average time: " << fixed << setprecision(3) << avg << " seconds" << endl;
-    cout << "  Min time: " << fixed << setprecision(3) << min_time << " seconds" << endl;
-    cout << "  Max time: " << fixed << setprecision(3) << max_time << " seconds" << endl;
-    cout << "  Std deviation: " << fixed << setprecision(3) << stddev << " seconds" << endl;
-    cout << "  Steps per second: " << fixed << setprecision(1) << steps / avg << endl;
-    cout << "  Cells per second: " << fixed << setprecision(1) << (steps * width * height) / avg << endl;
-    cout << "  Speedup vs sequential: ";
-
-    // We'll calculate speedup later when we have sequential results
-    static double sequential_time = 0.0;
-    if (thread_count == 1) {
-        sequential_time = avg;
-        cout << "N/A (baseline)" << endl;
-    } else if (sequential_time > 0) {
-        double speedup = sequential_time / avg;
-        cout << fixed << setprecision(2) << speedup << "x" << endl;
-    } else {
-        cout << "N/A (run sequential first)" << endl;
+const char* engine_name(EngineType e) {
+    switch (e) {
+        case EngineType::CPU:    return "CPU";
+        case EngineType::OPENMP:
+#ifdef _OPENMP
+            return "OpenMP";
+#else
+            return "CPU";
+#endif
+        case EngineType::CUDA:      return "CUDA";
+        case EngineType::CUDA_AOS:  return "CUDA_AoS";
+        default:                    return "?";
     }
 }
+
+// ---- Main ----
 
 int main(int argc, char* argv[]) {
-    cout << "LBM Simulation Benchmark Tool" << endl;
-    cout << "==============================" << endl;
+    auto cfg = parse_args(argc, argv);
 
-#ifdef _OPENMP
-    cout << "OpenMP is ENABLED" << endl;
-    cout << "Max available threads: " << omp_get_max_threads() << endl;
-#else
-    cout << "OpenMP is NOT AVAILABLE (compiled without OpenMP support)" << endl;
-#endif
+    int cells = cfg.width * cfg.height;
 
-    // Default test configurations
-    vector<pair<int, int>> grid_sizes = {
-        {50, 50},    // 2500 cells
-        {100, 100},  // 10000 cells
-        {200, 200}   // 40000 cells
-    };
+    if (!cfg.csv_output) {
+        cerr << "=== LBM Benchmark ===" << endl;
+        cerr << "Engine: " << engine_name(cfg.engine) << endl;
+        cerr << "Grid: " << cfg.width << "x" << cfg.height
+             << " (" << cells << " cells)" << endl;
+        cerr << "Warmup: " << cfg.warmup_steps << " steps" << endl;
+        cerr << "Bench: " << cfg.bench_steps << " steps" << endl;
+        cerr << "Repeats: " << cfg.repeats << endl;
+        cerr << "=========================" << endl;
+    }
 
-    int steps = 100; // Number of simulation steps per benchmark
-
-    // Thread configurations to test
-    vector<int> thread_configs;
-
-    // Check command line arguments
-    bool test_sequential_only = false;
-    bool test_openmp_only = false;
-
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--sequential") == 0) {
-            test_sequential_only = true;
-        } else if (strcmp(argv[i], "--openmp") == 0) {
-            test_openmp_only = true;
-        } else if (strcmp(argv[i], "--steps") == 0 && i + 1 < argc) {
-            steps = atoi(argv[++i]);
+    vector<BenchmarkResult> results;
+    for (int r = 0; r < cfg.repeats; ++r) {
+        auto res = benchmark_run(cfg);
+        results.push_back(res);
+        if (!cfg.csv_output) {
+            cerr << "  Run " << (r + 1) << ": "
+                 << fixed << setprecision(3) << res.time_seconds << " s  "
+                 << fixed << setprecision(2) << res.mlups << " MLUPS" << endl;
         }
     }
 
-    // Determine thread configurations to test
-    if (test_sequential_only) {
-        thread_configs = {1};
-    } else if (test_openmp_only) {
-        thread_configs = {get_omp_threads()};
+    // Statistics
+    double sum_t = 0, sum_m = 0;
+    double min_m = results[0].mlups, max_m = results[0].mlups;
+    for (auto& r : results) {
+        sum_t += r.time_seconds;
+        sum_m += r.mlups;
+        if (r.mlups < min_m) min_m = r.mlups;
+        if (r.mlups > max_m) max_m = r.mlups;
+    }
+    double avg_t = sum_t / cfg.repeats;
+    double avg_m = sum_m / cfg.repeats;
+
+    double stddev_m = 0;
+    for (auto& r : results) {
+        double d = r.mlups - avg_m;
+        stddev_m += d * d;
+    }
+    stddev_m = sqrt(stddev_m / cfg.repeats);
+
+    if (cfg.csv_output) {
+        // CSV row: engine,width,height,cells,steps,mlups_mean,mlups_stddev,mlups_min,mlups_max
+        cout << engine_name(cfg.engine) << ","
+             << cfg.width << "," << cfg.height << ","
+             << cells << "," << cfg.bench_steps << ","
+             << fixed << setprecision(2)
+             << avg_m << "," << stddev_m << ","
+             << min_m << "," << max_m << endl;
     } else {
-        // Test both sequential and parallel
-        thread_configs = {1, get_omp_threads()};
+        cerr << "-------------------------" << endl;
+        cerr << "Results: " << fixed << setprecision(2)
+             << avg_m << " ± " << stddev_m << " MLUPS"
+             << "  [min=" << min_m << " max=" << max_m << "]"
+             << "  avg_time=" << fixed << setprecision(3) << avg_t << " s" << endl;
     }
-
-    for (const auto& size : grid_sizes) {
-        int width = size.first;
-        int height = size.second;
-
-        for (int threads : thread_configs) {
-            run_benchmark(width, height, steps, threads);
-        }
-    }
-
-    cout << "\n=== Benchmark Complete ===" << endl;
-    cout << "\nUsage notes:" << endl;
-    cout << "  ./benchmark_lbm                    - Run both sequential and OpenMP" << endl;
-    cout << "  ./benchmark_lbm --sequential       - Run sequential only" << endl;
-    cout << "  ./benchmark_lbm --openmp           - Run OpenMP only" << endl;
-    cout << "  ./benchmark_lbm --steps N          - Run N steps per test (default: 100)" << endl;
-    cout << "  OMP_NUM_THREADS=N ./benchmark_lbm  - Set OpenMP thread count" << endl;
 
     return 0;
 }

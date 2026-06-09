@@ -4,9 +4,18 @@ project(project_2_2_group_1 LANGUAGES CXX)
 include(CheckLanguage)
 check_language(CUDA)
 
+# Prevent GCC-injected -fopenmp from triggering nvptx offload (EESSI toolchain).
+# Only when NOT explicitly building for OpenMP offload.
+# Must be on both compile and link to stop LTO nvptx invocations.
+if(NOT ENABLE_OMP_OFFLOAD)
+    add_compile_options(-foffload=disable)
+    add_link_options(-foffload=disable)
+endif()
+
 if(CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
     add_compile_definitions(CUDA_AVAILABLE=1)
+    set(CMAKE_CUDA_ARCHITECTURES 89)
 endif()
 
 # Upgraded to 17. ImGui and WebSockets work better with modern C++ standards
@@ -15,6 +24,8 @@ set(CMAKE_CXX_STANDARD 17)
 # Option to build with GUI (requires OpenGL/GLFW/ImGui).
 # Set -DBUILD_GUI=OFF for headless/batch-only builds (e.g., on a cluster).
 option(BUILD_GUI "Build the GUI application" ON)
+
+find_package(Threads REQUIRED)
 
 # OpenMP support for parallelization
 find_package(OpenMP)
@@ -91,6 +102,7 @@ endif()
 include_directories(
     src/main
     src/data
+    src/data/local
     src/data/cavity
     src/thread
 )
@@ -128,11 +140,32 @@ add_library(simulation_logic
     src/main/main.h
 )
 
+# CUDA sources (only when CUDA compiler is available)
+if(CMAKE_CUDA_COMPILER)
+    set(CUDA_SOURCES
+        src/data/local/gpu/CUDA/kernels.cu
+        src/data/local/gpu/CUDA/kernels.cuh
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cu
+        src/data/local/gpu/CUDA/LocalCUDAEngine.cuh
+        src/data/local/gpu/CUDA/kernels_aos.cu
+        src/data/local/gpu/CUDA/kernels_aos.cuh
+        src/data/local/gpu/CUDA/LocalCUDAEngineAoS.cu
+        src/data/local/gpu/CUDA/LocalCUDAEngineAoS.cuh
+    )
+else()
+    set(CUDA_SOURCES "")
+endif()
+
 # --- Main executables ---
 if(BUILD_GUI)
+    if(CMAKE_CUDA_COMPILER)
+        set_source_files_properties(src/ui/ui.cpp PROPERTIES LANGUAGE CUDA)
+    endif()
+
     add_executable(project_2_2_group_1
         src/main/main.cpp
         src/ui/ui.cpp
+        ${CUDA_SOURCES}
         src/ui/ui.h
         ${IMGUI_SOURCES}
         ${IMPLOT_SOURCES}
@@ -151,6 +184,7 @@ if(BUILD_GUI)
 else()
     add_executable(project_2_2_group_1
         src/main/main_batch.cpp
+        ${CUDA_SOURCES}
     )
 
     target_link_libraries(project_2_2_group_1
@@ -176,7 +210,7 @@ endif()
 add_test(NAME StreamAndBoundaryTest COMMAND test_stream)
 
 # Benchmark executable
-add_executable(benchmark_lbm benchmark_lbm.cpp)
+add_executable(benchmark_lbm benchmark_lbm.cpp ${CUDA_SOURCES})
 target_link_libraries(benchmark_lbm simulation_logic)
 if(OpenMP_CXX_FOUND)
     target_link_libraries(benchmark_lbm OpenMP::OpenMP_CXX)

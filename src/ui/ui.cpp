@@ -16,11 +16,21 @@
 #include "main.h"
 #include "../thread/ReusableThread.h"
 
+#if CUDA_AVAILABLE == 1
+#include "../data/local/gpu/CUDA/LocalCUDAEngine.cuh"
+#endif
+
 DataSource currentSource;
 std::unique_ptr<SimulationEngine> engine;
 std::unique_ptr<SimulationEngine> createEngine(int w, int h, bool constantHeatSource) {
 
     switch (currentSource) {
+        case DataSource::LOCAL_CUDA:
+            #if CUDA_AVAILABLE == 1
+                return std::make_unique<LocalCUDAEngine>(w, h, constantHeatSource);
+            #else
+                std::cerr << "CUDA requested but not available. Falling back to CPU.\n";
+            #endif
         case DataSource::LOCAL:
             return std::make_unique<LocalEngine>(w, h, constantHeatSource);
         default:
@@ -574,26 +584,54 @@ void launchGui() {
         // 1. Hardware Detection
         unsigned int cpu_threads = std::thread::hardware_concurrency();
         ImGui::Text("Host Hardware: %d CPU Threads", cpu_threads);
-        ImGui::Text("CUDA GPU: None (CPU Prototype Mode)");
+#if CUDA_AVAILABLE == 1
+        if (currentSource == DataSource::LOCAL_CUDA) {
+            ImGui::Text("Engine: CUDA GPU (NVIDIA)");
+        } else {
+            ImGui::Text("Engine: CPU (LocalEngine)");
+        }
+#else
+        ImGui::Text("Engine: CPU (LocalEngine)");
+#endif
 
         // 2. LBM Grid Stats
         ImGui::Text("Grid Size: %d x %d", engine->width, engine->height);
         ImGui::Text("Memory Nodes: %d cells", engine->cells);
 
+        // FPS counter
+        static double fps_history[60] = {};
+        static int fps_idx = 0;
+        static double last_frame_time = glfwGetTime();
+        double now = glfwGetTime();
+        double delta = now - last_frame_time;
+        last_frame_time = now;
+        fps_history[fps_idx % 60] = (delta > 0) ? 1.0 / delta : 0;
+        fps_idx++;
+        double fps_sum = 0; int fps_n = 0;
+        for (int i = 0; i < 60 && fps_history[i] > 0; i++) { fps_sum += fps_history[i]; fps_n++; }
+        double fps_avg = fps_n > 0 ? fps_sum / fps_n : 0;
+        ImGui::Text("FPS: %.0f (%.1f ms/frame)", fps_avg, delta * 1000.0);
+
         // 3. Thermodynamic Conservation
         // Sums up every temperature in the grid to prove no heat is lost
         double total_temp = std::accumulate(state.temperatures.begin(), state.temperatures.end(), 0.0);
-        ImGui::Text("Total System Temeprature: %.2f °C", total_temp);
+        ImGui::Text("Total System Temperature: %.2f °C", total_temp);
         ImGui::Text("One time step real world equivalent: %.2f ms ", state.seconds_per_step*1000);
         ImGui::Text("Total real world time spent: %.2f seconds", state.seconds_per_step * state.current_step);
-        ImGui::Text("Thermal Relaxation Time: %.4f", state.tauT);
-        ImGui::Text("Density Relaxation Time: %.4f", state.tauF);
+        ImGui::Text("Thermal Relaxation Time (tau_g): %.4f", state.tauT);
+        ImGui::Text("Density Relaxation Time (tau_f): %.4f", state.tauF);
+
+        // Rayleigh number (= buoyancy / (viscosity * diffusivity))
+        double Ra = state.lattice_buoyancy * std::pow((double)state.height, 3) * (MAX_TEMP - ROOM_TEMP)
+                    / (state.lattice_kinematic_viscosity * state.lattice_thermal_diffusivity);
+        ImGui::Text("Rayleigh Number (Ra): %.2e", Ra);
+
         double convection = history->convectionOutput[state.current_step];
         double radiation = history->radiationOutput[state.current_step];
-        double ratioR = (radiation / (radiation + convection)) * 100;
+        double ratioR = (radiation + convection > 0) ? (radiation / (radiation + convection)) * 100 : 0;
         ImGui::Text("Convection this step: %.4f", convection);
         ImGui::Text("Radiation this step: %.4f", radiation);
-        ImGui::Text("Percentage Radiation: %.2f", ratioR);
+        ImGui::Text("Percentage Radiation: %.1f%%", ratioR);
 
         ImGui::End();
 

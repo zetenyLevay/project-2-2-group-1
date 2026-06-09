@@ -22,12 +22,18 @@ struct SimulationState {
     std::vector<double> temperatures;
     int heatSourceW;
     int heatSourceH;
-    std::vector<bool> isRad;
+    std::vector<char> isRad;
     std::vector<int> heatSources;
     bool isConstantHeatSource;
 
     std::vector<int> boundaryCells;
+    std::vector<int> cellToBoundary;  // maps cell index -> boundaryCells index, -1 if not boundary
     std::vector<ViewFactor> viewFactors;
+    // CSR (Compressed Sparse Row) view factor layout for coalesced GPU radiation:
+    // boundaryVFStart[i] = start offset in vfSourceCSR/vfFactorCSR for boundary cell i
+    std::vector<int>    boundaryVFStart;
+    std::vector<int>    vfSourceCSR;
+    std::vector<double> vfFactorCSR;
     std::vector<std::vector<double>> localFluxCache;
     std::vector<double> t4;
 
@@ -95,5 +101,6 @@ public:
 };
 
 enum DataSource {
-    LOCAL
+    LOCAL,
+    LOCAL_CUDA
 };

@@ -3,21 +3,29 @@
 #include <cmath>
 #include <iostream>
 
+#if CUDA_AVAILABLE == 1
+#include "local/gpu/CUDA/LocalCUDAEngine.cuh"
+#endif
+
 // Main Writer: Kristian
-// Reviewer: 
+// Reviewer:
 // Contributers: Berke
 std::thread runSimulations(int width, int height, int temperature, bool constantHeatSource, int NumberOfSims, const std::string& filename) {
     return std::thread([=]() {
         for (int i = 0; i < NumberOfSims; ++i) {
             std::cout << "Starting Simulation " << i + 1 << " of " << NumberOfSims << std::endl;
-            
+
             // Set temperature
             MAX_TEMP = temperature;
-            
-            LocalEngine engine(width, height, constantHeatSource);
-            bool isComplete = false; // The simulation is complete once the hot spot and cold spot are equal 
-            int expectedStep = 0;
 
+#if CUDA_AVAILABLE == 1
+            LocalCUDAEngine engine(width, height, constantHeatSource);
+            engine.batchMode = true;
+#else
+            LocalEngine engine(width, height, constantHeatSource);
+#endif
+            bool isComplete = false;
+            int expectedStep = 0;
             const SimulationHistory* history = engine.getReadOnlyHistory();
 
             while (!isComplete) {
