@@ -70,15 +70,24 @@ if [[ "$MODES" == *"omp"* ]]; then
     done
 fi
 
-# GPU CUDA
+# GPU CUDA SoA
 if [[ "$MODES" == *"cuda"* ]]; then
     DIR="$PROJECT_DIR/build-bench-cuda"
     CUDA_FLAG=""
     [ -n "${CUDA_ARCH:-}" ] && CUDA_FLAG="-DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCH"
     build_if_needed "GPU CUDA" "$DIR" $CUDA_FLAG
-    echo "# GPU CUDA" >&2
+    echo "# GPU CUDA SoA" >&2
     for s in "${GRID_SIZES[@]}"; do read w h <<< "$s"
         run_bench "$DIR/benchmark_lbm" cuda "$w" "$h"
+    done
+fi
+
+# GPU CUDA AoS (collision+stream only; for RQ3 fair comparison, disable physics in SoA too)
+if [[ "$MODES" == *"aos"* ]]; then
+    DIR="$PROJECT_DIR/build-bench-cuda"
+    echo "# GPU CUDA AoS" >&2
+    for s in "${GRID_SIZES[@]}"; do read w h <<< "$s"
+        run_bench "$DIR/benchmark_lbm" cuda-aos "$w" "$h"
     done
 fi
 

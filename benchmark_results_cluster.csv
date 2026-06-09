@@ -1,0 +1,28 @@
+# Cluster benchmark results — L40 GPU (48 GB VRAM, sm_89, 864 GB/s)
+# Date: 2026-06-09
+# Binary: build-nocmake (no cmake, g++ + nvcc, -O3, no OpenMP)
+# Metric: MLUPS = (cells * steps) / (seconds * 1e6)
+# Warmup: 20 steps, Repeats: 3 for single-GPU, 1 for multi-GPU
+# IMPORTANT: SoA = full physics (radiation + collision + stream + reduce + heat source)
+#            AoS = collision + stream ONLY (no radiation, no heat source, no reduce)
+#            SoA and AoS rows are NOT directly comparable — they measure different things.
+#            For fair AoS vs SoA comparison, see benchmark_results_local.csv (physics disabled in both).
+engine,gpus,width,height,cells,steps,mlups_mean,mlups_stddev,mlups_min,mlups_max,total_mlups,physics
+# Single-GPU scaling
+CUDA_SoA,1,128,128,16384,100,55.12,0.17,54.94,55.36,,full
+CUDA_SoA,1,256,256,65536,100,112.15,0.41,111.58,112.50,,full
+CUDA_SoA,1,512,512,262144,100,167.66,0.09,167.55,167.77,,full
+CUDA_SoA,1,1024,1024,1048576,100,218.45,0.44,217.82,218.78,,full
+CUDA_SoA,1,2048,2048,4194304,100,259.27,0.03,259.24,259.31,,full
+CUDA_SoA,1,4096,4096,16777216,100,288.03,0.80,287.45,289.16,,full
+# Multi-GPU strong scaling (4096², concurrent independent instances)
+CUDA_SoA,2,4096,4096,16777216,50,288.59,0.00,288.35,288.83,577.4,full
+CUDA_SoA,3,4096,4096,16777216,50,288.65,0.00,288.50,288.80,864.9,full
+CUDA_SoA,4,4096,4096,16777216,50,288.51,0.00,288.41,288.70,1153.4,full
+# AoS (collision+stream only — NOT comparable to SoA full physics)
+CUDA_AoS,1,128,128,16384,100,159.60,0.84,158.83,160.76,,collision+stream only
+CUDA_AoS,1,256,256,65536,100,332.44,0.30,332.03,332.75,,collision+stream only
+CUDA_AoS,1,512,512,262144,100,302.68,0.29,302.35,303.07,,collision+stream only
+CUDA_AoS,1,1024,1024,1048576,100,282.82,0.04,282.78,282.87,,collision+stream only
+CUDA_AoS,1,2048,2048,4194304,50,293.15,0.05,293.09,293.20,,collision+stream only
+CUDA_AoS,1,4096,4096,16777216,50,297.03,0.31,296.63,297.38,,collision+stream only
