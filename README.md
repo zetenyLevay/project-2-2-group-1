@@ -7,182 +7,133 @@ This project is a C++ implementation of a 2D Thermal fluid flow simulation using
 
 Currently, this aims to be a robust CPU based prototype. To prepare for High-Performance Computing (HPC) and future GPU/CUDA acceleration, the core data structures are implemented using a **Structure of Arrays (SoA)** memory layout to ensure continuous memory access and maximize memory coalescing.
 
-## Repository Structure
-```text
-project_2_2_group_1/
-├── CMakeLists.txt                  # Build configuration
-├── README.md                       # Project documentation
-├── benchmark_lbm.cpp               # OpenMP benchmark tool
-├── plotting/                       # Plots data from Lid-Driven Cavity test
-│   └── main.py
-├── src/
-│   ├── main/
-│   │   ├── main.cpp                # GUI entry point (WebSocket + UI)
-│   │   ├── main_batch.cpp          # Batch-only entry point (headless)
-│   │   └── main.h                  # Shared constants, structs, and declarations
-│   ├── ui/
-│   │   ├── ui.cpp                  # User interface logic
-│   │   └── ui.h  
-│   ├── thread/   
-│   │   ├── ReusableThread.cpp      # Thread logic         
-│   │   └── ReusableThread.h     
-│   ├── data/   
-│   │   ├── SimulationEngine.cpp    # Base simulation engine       
-│   │   ├── SimulationEngine.h  
-│   │   ├── BatchRunner.cpp         # Batch simulation runner
-│   │   ├── BatchRunner.h    
-│   │   ├── cavity/                  # Lid-Driven Cavity accuracy test
-│   │   │   ├── LidDrivenCavity.cpp 
-│   │   │   └── LidDrivenCavity.h
-│   │   └── local/
-│   │       ├── LocalEngine.cpp     # LBM physics (collision, streaming)
-│   │       └── LocalEngine.h 
-│   └── CUDA/                       # Cuda logic
-│       ├── CollisionCUDA.cu        
-│       └── CollisionTest.cpp   
-├── tests/
-│   └── test_stream.cpp             # Unit tests for streaming
-├── saves/                          # Simulation save files (generated)
-└── vendor/                         # Third-party dependencies
-    ├── glfw-3.4/
-    ├── imgui/
-    ├── implot/
-    └── pfd/
-```
+.
 
 ## Prerequisites
-To compile and run this project, you will need the following installed on your system:
 
-**C++ Compiler**: Must support **C++17** (e.g., GCC, Clang, or MSVC).
+- **C++17** compiler (GCC 11+, Clang 14+)
+- **CMake** 3.14+
+- **CUDA Toolkit** 12+ (optional, for GPU acceleration)
+- **OpenGL** + **GLFW** (optional, for GUI)
+- **OpenMP** (optional, for CPU multi-threading)
+- **Python 3** + matplotlib (optional, for plotting cavity results)
 
-**CMake**: Version **3.5 - 4.3**.
-
-## Compilation Instructions
-This project uses CMake for an out-of-source build, keeping compiled binaries separate from the source code.
-
-### GUI Build (default)
-Builds the full desktop application with heatmap visualization, controls, and WebSocket server.
-
-``` bash
-mkdir build && cd build
-cmake ..
-cmake --build .
-./project_2_2_group_1
-```
-
-### Batch-Only Build (No GUI)
-For running simulations on a cluster or headless system without OpenGL/display dependencies.
-
-``` bash
-mkdir build && cd build
-cmake .. -DBUILD_GUI=OFF
-cmake --build .
-```
-
-Then I either run a default batch (55°C and a constant heatsource) or you can specify these variables.
-
-Default:
-``` bash
-./project_2_2_group_1 --batch <width> <height> <NumberOfSims> <filename>
-```
-
-Advanced:
-``` bash
-./project_2_2_group_1 --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>
-```
-
-### OpenMP 5.0 GPU Offloading (cluster with NVIDIA GPU)
-If your system has GCC with `nvptx-tools` installed, offloading is auto-detected.
-Otherwise, force-enable it for cluster builds:
-
-``` bash
-cmake .. -DENABLE_OMP_OFFLOAD=ON -DOMP_OFFLOAD_TARGET=nvptx-none
-cmake --build .
-```
-
-(Use `-DOMP_OFFLOAD_TARGET=amdgcn-amd-amdhsa` for AMD GPUs.)
-
-## Running the Simulation
-
-### GUI Mode (default build)
-``` bash
-./project_2_2_group_1
-```
-Launches a desktop window with a heatmap visualization, simulation controls (play/pause, step, timeline), temperature convergence graph, and save/load functionality.
-
-### Batch Mode
-Runs simulations until the room reaches 30°C without any display, useful for data collection or cluster execution. Again you can choose to specify certain variables or go with the default.
-
-Default:
-``` bash
-./project_2_2_group_1 --batch <width> <height> <NumberOfSims> <filename>
-```
-
-Advanced:
-``` bash
-./project_2_2_group_1 --batch <width> <height> <temperature> <constantHeat> <NumberOfSims> <filename>
-```
-
-| Argument | Description |
-|---|---|
-| `width`, `height` | Grid dimensions in cells |
-| `temperature` | The maximum heat the radiator will reach |
-| `constantHeat` | Choice between a constant heating radiator or one that dissipates |
-| `numberOfSims` | Number of independent simulations to run |
-| `filename` | Output file base name (saved to `saves/`) |
-
-### Lid-Driven Cavity Benchmark (physics validation)
-Runs an isothermal lid-driven cavity simulation to steady state and exports centerline velocity profiles to CSV. This validates the LBM physics implementation against the reference data from **Ghia et al. (1982)**.
-
-``` bash
-./project_2_2_group_1 --cavity              # N=64, Re=100, U_lid=0.1
-./project_2_2_group_1 --cavity 128          # 128x128 grid
-./project_2_2_group_1 --cavity 64 400       # Re=400
-./project_2_2_group_1 --cavity 64 100 0.05  # Custom lid velocity
-```
-
-| Argument | Description | Default |
-|---|---|---|
-| `N` | Grid size (N×N cells) | `64` |
-| `Re` | Reynolds number | `100.0` |
-| `U_lid` | Lid velocity (lattice units) | `0.1` |
-
-Output is saved to `saves/cavity_Re<N>_N<N>.csv` containing vertical and horizontal centerline velocity profiles. Compare these against Ghia et al. (1982) data to verify correctness.
-
-### OpenMP Performance Benchmark (speed measurement)
-Measures performance across grid sizes with and without OpenMP. This tests **throughput** (steps/second, cells/second), not physics correctness.
-
-``` bash
-./benchmark_lbm                    # Both sequential and OpenMP
-./benchmark_lbm --sequential       # CPU only
-./benchmark_lbm --openmp           # OpenMP only
-./benchmark_lbm --steps 200       # Custom step count
-OMP_NUM_THREADS=4 ./benchmark_lbm # Set thread count
-```
-
-| Flag | Description |
-|---|---|
-| *(none)* | Runs both sequential (1 thread) and parallel (all cores) on 50×50, 100×100, and 200×200 grids |
-| `--sequential` | Sequential only |
-| `--openmp` | OpenMP only (uses `OMP_NUM_THREADS` or all available cores) |
-| `--steps N` | Number of simulation steps per benchmark run (default: 100) |
-| `OMP_NUM_THREADS=N` | Environment variable to control thread count |
-
-> **Key difference**: The lid-driven cavity benchmark (`--cavity`) validates **physics correctness** by checking convergence against a known CFD problem. The OpenMP benchmark (`benchmark_lbm`) measures **execution speed** and parallel scaling, it uses the same LocalEngine but reports time, throughput, and speedup rather than flow profiles.
-
-
-## Testing
-We use CMake's default testing framework (CTest) to validate individual modules without running the full simulation loop.
-
-To run the tests ensure you are inside the build directory and run:
+## Compilation
 
 ```bash
-ctest --output-on-failure
+# Headless CPU-only (serial)
+cmake -DBUILD_GUI=OFF -DCMAKE_CUDA_COMPILER="" .. -B build-cpu
+cmake --build build-cpu
+
+# Headless with CUDA GPU acceleration
+cmake -DBUILD_GUI=OFF .. -B build-cuda
+cmake --build build-cuda
+
+# GUI (with CUDA if available, falls back to CPU)
+cmake -DBUILD_GUI=ON .. -B build-gui
+cmake --build build-gui
+./build-gui/project_2_2_group_1
+
+# Benchmark tool
+cmake --build build-cuda --target benchmark_lbm
+./build-cuda/benchmark_lbm --engine cuda --width 1024 --height 1024 --steps 100 --csv
+
+# Full benchmark sweep
+./scripts/benchmark_script.sh --cluster > results.csv
 ```
-Note: The ```text --output-on-failure``` flag ensures that if a test (like test_stream) fails an assertion, the terminal will print exactly which line of code caused the crash.
 
-Alternatively, you can run the test executable manually to see its terminal output:
+## Batch mode (headless simulation)
 
-Unix: ./test_stream
+```bash
+# Run a simulation to thermal steady state (mean > 30°C)
+./build-cuda/project_2_2_group_1 --batch 512 512 55 true 1 my_simulation
+# Arguments: width height temperature constantHeat numberOfSims filename
+```
 
-Windows: Debug\test_stream.exe
+## Execution modes
+
+| Mode | Engine | GPU | Parallelism |
+|------|--------|-----|-------------|
+| CPU serial | `LocalEngine` | — | Single thread |
+| CPU OpenMP | `LocalEngine` | — | Multi-core via `#pragma omp parallel for` |
+| GPU CUDA SoA | `LocalCUDAEngine` | NVIDIA | Hand-written CUDA kernels |
+| GPU CUDA AoS | `LocalCUDAEngineAoS` | NVIDIA | Uncoalesced layout (RQ3 comparison) |
+
+## Repository structure
+
+```
+project_2_2_group_1/
+├── CMakeLists.txt
+├── README.md
+├── benchmark_lbm.cpp               # Multi-mode benchmark
+├── scripts/
+│   ├── benchmark_script.sh         # Automated grid sweep
+├── src/
+│   ├── main/
+│   │   ├── main.cpp                # GUI entry point
+│   │   ├── main_batch.cpp          # Headless batch entry point
+│   │   └── main.h                  # Constants, Grid struct
+│   ├── ui/
+│   │   ├── ui.cpp / ui.h           # ImGui + ImPlot GUI
+│   ├── thread/
+│   │   ├── ReusableThread.cpp/.h   # Triple-buffered compute thread
+│   │   └── SimulationStateBuffers.cpp/.h
+│   ├── data/
+│   │   ├── SimulationEngine.cpp/.h # Base engine, SimulationState
+│   │   ├── BatchRunner.cpp/.h      # Batch simulation runner
+│   │   ├── cavity/                 # Lid-driven cavity benchmark
+│   │   └── local/
+│   │       ├── LocalEngine.cpp/.h  # CPU LBM implementation
+│   │       └── gpu/CUDA/
+│   │           ├── kernels.cu/.cuh           # GPU kernels (SoA)
+│   │           ├── kernels_aos.cu/.cuh       # GPU kernels (AoS)
+│   │           ├── kernels_shared.cuh        # Shared constant memory
+│   │           ├── LocalCUDAEngine.cu/.cuh   # CUDA engine (SoA)
+│   │           └── LocalCUDAEngineAoS.cu/.cuh # CUDA engine (AoS)
+└── tests/
+    └── test_stream.cpp
+```
+
+## Lid-Driven Cavity Benchmark (physics validation)
+
+Validates the isothermal LBM solver against the classic Ghia et al. benchmark. Uses Zou/He boundary conditions on the lid and bounce-back on walls. Exports velocity profiles to CSV for comparison.
+
+```bash
+./build/project_2_2_group_1 --cavity 128 100 0.1   # N=128, Re=100, U_lid=0.1
+```
+
+## Key optimizations
+
+| Optimization | Impact |
+|-------------|--------|
+| GPU-resident grids (no per-step H↔D transfer) | 288 MB/step → 0 |
+| Batch mode scalar-only download | 2 MB → 24 bytes/step |
+| CSR view factor grouping | Radiation: 25 ms CPU → 0.4 ms GPU (62×) |
+| Pinned host memory (`cudaMallocHost`) | ~3× faster D2H transfers |
+| SoA memory layout | 30% faster than AoS at ≥256² |
+
+## Performance (L40 cluster, 4096², full physics)
+
+| GPUs | MLUPS | Steps/sec |
+|------|-------|-----------|
+| 1 | 288 | 17.2 |
+| 2 | 577 | 34.4 |
+| 3 | 866 | 51.6 |
+| 4 | 1,153 | 68.7 |
+
+## Cluster (SLURM)
+
+```bash
+sbatch scripts/slurm_benchmark.sh
+```
+
+The SLURM script auto-detects the GPU architecture (L40/A100/H100) and sets the correct CUDA compile target.
+
+## Research questions
+
+| RQ | Question | Status |
+|----|----------|--------|
+| RQ1 | GPU scaling (strong/weak) | Single-GPU ✅, Multi-GPU ✅ (perfect linear to 4 GPUs) |
+| RQ2 | Diminishing returns | No diminishing returns up to 4 GPUs |
+| RQ3 | AoS vs SoA memory layout | SoA 30% faster at ≥256² |
+| RQ4 | GPU vs CPU speedup | 17–45× over CPU serial, 9–17× over OpenMP |
