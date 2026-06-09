@@ -113,9 +113,9 @@ Validates the isothermal LBM solver against the Ghia et al. (1982) benchmark. Us
 
 | Optimization | Impact |
 |-------------|--------|
-| GPU-resident grids (0 Host-Device memory transfer per step) | 288 MB/step → 0 bytes/step |
-| Batch mode scalar-only download | 2 MB/step → 24 bytes/step |
-| CSR view factor grouping | Radiation: 25 ms/step CPU → 0.4 ms/step GPU (factor of 62×) |
+| GPU-resident grids (Host-Device memory transfers greatly reduced) | 288 MB/step -> 0 bytes/step |
+| Batch mode scalar-only download | 2 MB/step -> 24 bytes/step |
+| CSR view factor grouping | Radiation: 25 ms/step CPU -> 0.4 ms/step GPU (factor of 62×) |
 | Pinned host memory (`cudaMallocHost`) | ~3× faster Device to Host transfers |
 | SoA memory layout | 30% faster than AoS for grids larger than 256x256 |
 
