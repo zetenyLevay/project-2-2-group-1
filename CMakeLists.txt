@@ -6,7 +6,6 @@ check_language(CUDA)
 
 # Prevent GCC-injected -fopenmp from triggering nvptx offload (EESSI toolchain).
 # Only when NOT explicitly building for OpenMP offload.
-# Must be on both compile and link to stop LTO nvptx invocations.
 if(NOT ENABLE_OMP_OFFLOAD)
     add_compile_options(-foffload=disable)
     add_link_options(-foffload=disable)
